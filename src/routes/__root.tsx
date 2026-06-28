@@ -92,6 +92,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#7a1a26" },
+      { property: "og:title", content: "Reactify Commerce — Premium Online Shopping in Nepal" },
+      { name: "twitter:title", content: "Reactify Commerce — Premium Online Shopping in Nepal" },
+      { name: "description", content: "An enterprise-grade e-commerce platform for Nepal, enabling businesses to sell products online with comprehensive features." },
+      { property: "og:description", content: "An enterprise-grade e-commerce platform for Nepal, enabling businesses to sell products online with comprehensive features." },
+      { name: "twitter:description", content: "An enterprise-grade e-commerce platform for Nepal, enabling businesses to sell products online with comprehensive features." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/21f107ad-40d5-49ce-949e-382fdf0016bf/id-preview-ee660975--6a6cd895-a30a-4ad6-87fe-1b2112d75daf.lovable.app-1782637979313.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/21f107ad-40d5-49ce-949e-382fdf0016bf/id-preview-ee660975--6a6cd895-a30a-4ad6-87fe-1b2112d75daf.lovable.app-1782637979313.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
