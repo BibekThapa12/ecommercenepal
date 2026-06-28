@@ -98,13 +98,7 @@ function Index() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             {user ? (
-              <>
-                {isStaff && (
-                  <Button asChild variant="ghost" size="sm">
-                    <Link to="/admin">Admin</Link>
-                  </Button>
-                )}
-              </>
+              <UserMenu />
             ) : (
               <Button asChild size="sm" className="bg-gradient-primary hover:opacity-90 shadow-elegant">
                 <Link to="/auth">Sign in</Link>
