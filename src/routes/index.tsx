@@ -152,14 +152,15 @@ function FlashSaleSlider({ items, loading }: { items: ProductRow[]; loading: boo
     return () => clearInterval(id);
   }, [items.length]);
 
+  const current = items[index];
+  const countdown = useCountdown(current?.flash_sale_ends_at ?? null);
+
   if (loading) {
     return <div className="h-[380px] rounded-3xl bg-muted animate-pulse" />;
   }
-  if (items.length === 0) return null;
+  if (items.length === 0 || !current) return null;
 
-  const current = items[index];
   const img = current.product_images.find((i) => i.is_primary) ?? current.product_images[0];
-  const countdown = useCountdown(current.flash_sale_ends_at);
   const discount =
     current.compare_at_price_npr && current.compare_at_price_npr > current.price_npr
       ? Math.round(
