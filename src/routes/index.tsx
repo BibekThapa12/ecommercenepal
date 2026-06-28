@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
@@ -98,13 +99,7 @@ function Index() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             {user ? (
-              <>
-                {isStaff && (
-                  <Button asChild variant="ghost" size="sm">
-                    <Link to="/admin">Admin</Link>
-                  </Button>
-                )}
-              </>
+              <UserMenu />
             ) : (
               <Button asChild size="sm" className="bg-gradient-primary hover:opacity-90 shadow-elegant">
                 <Link to="/auth">Sign in</Link>
