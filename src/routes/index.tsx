@@ -1,14 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Flame, ShoppingBag, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { UserMenu } from "@/components/user-menu";
-import { useAuth } from "@/lib/auth";
+import { SiteHeader } from "@/components/site-header";
+import { ProductCard, type ProductCardData } from "@/components/product-card";
+import { formatNPR } from "@/lib/commerce";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -29,21 +29,9 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type ProductRow = {
-  id: string;
-  slug: string;
-  name: string;
-  short_description: string | null;
-  price_npr: number;
-  compare_at_price_npr: number | null;
-  is_flash_sale: boolean;
+type ProductRow = ProductCardData & {
   flash_sale_ends_at: string | null;
-  product_images: { url: string; alt_text: string | null; is_primary: boolean }[];
 };
-
-function formatNPR(n: number) {
-  return `NPR ${new Intl.NumberFormat("en-IN").format(n)}`;
-}
 
 function useCountdown(target: string | null) {
   const [now, setNow] = useState(() => Date.now());
@@ -61,15 +49,13 @@ function useCountdown(target: string | null) {
 }
 
 function Index() {
-  const { user, isStaff } = useAuth();
-
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["storefront-products"],
     queryFn: async (): Promise<ProductRow[]> => {
       const { data, error } = await supabase
         .from("products")
         .select(
-          "id, slug, name, short_description, price_npr, compare_at_price_npr, is_flash_sale, flash_sale_ends_at, product_images(url, alt_text, is_primary)",
+          "id, slug, name, short_description, price_npr, compare_at_price_npr, stock_quantity, is_flash_sale, flash_sale_ends_at, product_images(url, alt_text, is_primary)",
         )
         .eq("status", "active")
         .order("created_at", { ascending: false });
@@ -82,32 +68,7 @@ function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Minimal header */}
-      <header className="sticky top-0 z-40 glass border-b border-border/40">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-primary shadow-elegant">
-              <ShoppingBag className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <div className="leading-tight">
-              <div className="font-display text-lg font-semibold">Reactify</div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground -mt-0.5">
-                Commerce
-              </div>
-            </div>
-          </Link>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            {user ? (
-              <UserMenu />
-            ) : (
-              <Button asChild size="sm" className="bg-gradient-primary hover:opacity-90 shadow-elegant">
-                <Link to="/auth">Sign in</Link>
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="container mx-auto px-4 py-8 space-y-12">
         <FlashSaleSlider items={flashSales} loading={isLoading} />
@@ -174,10 +135,7 @@ function FlashSaleSlider({ items, loading }: { items: ProductRow[]; loading: boo
         )}
       </div>
 
-      <div
-        ref={trackRef}
-        className="relative overflow-hidden rounded-3xl border bg-card shadow-elegant"
-      >
+      <div ref={trackRef} className="relative overflow-hidden rounded-3xl border bg-card shadow-elegant">
         <div className="grid md:grid-cols-2 min-h-[380px]">
           <div className="relative bg-gradient-hero overflow-hidden">
             {img && (
@@ -199,9 +157,7 @@ function FlashSaleSlider({ items, loading }: { items: ProductRow[]; loading: boo
             <div className="text-xs uppercase tracking-widest text-muted-foreground">
               Limited time offer
             </div>
-            <h3 className="font-display text-3xl lg:text-4xl font-semibold mt-2">
-              {current.name}
-            </h3>
+            <h3 className="font-display text-3xl lg:text-4xl font-semibold mt-2">{current.name}</h3>
             {current.short_description && (
               <p className="text-muted-foreground mt-3 max-w-md">{current.short_description}</p>
             )}
@@ -221,7 +177,6 @@ function FlashSaleSlider({ items, loading }: { items: ProductRow[]; loading: boo
           </div>
         </div>
 
-        {/* Controls */}
         <button
           aria-label="Previous"
           onClick={() => setIndex((i) => (i - 1 + items.length) % items.length)}
@@ -237,7 +192,6 @@ function FlashSaleSlider({ items, loading }: { items: ProductRow[]; loading: boo
           <ChevronRight className="h-5 w-5" />
         </button>
 
-        {/* Dots */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
           {items.map((_, i) => (
             <button
@@ -252,67 +206,6 @@ function FlashSaleSlider({ items, loading }: { items: ProductRow[]; loading: boo
         </div>
       </div>
     </section>
-  );
-}
-
-function ProductCard({ product }: { product: ProductRow }) {
-  const img = product.product_images.find((i) => i.is_primary) ?? product.product_images[0];
-  const discount =
-    product.compare_at_price_npr && product.compare_at_price_npr > product.price_npr
-      ? Math.round(
-          ((product.compare_at_price_npr - product.price_npr) / product.compare_at_price_npr) * 100,
-        )
-      : null;
-
-  return (
-    <div className="group rounded-2xl border bg-card shadow-card overflow-hidden transition-base hover:shadow-elegant hover:-translate-y-0.5">
-      <div className="aspect-square relative bg-muted overflow-hidden">
-        {img ? (
-          <img
-            src={img.url}
-            alt={img.alt_text ?? product.name}
-            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
-            loading="lazy"
-          />
-        ) : (
-          <div className="h-full w-full grid place-items-center text-muted-foreground">
-            <ShoppingBag className="h-8 w-8" />
-          </div>
-        )}
-        {discount !== null && (
-          <Badge className="absolute top-3 left-3 bg-primary text-primary-foreground border-0">
-            -{discount}%
-          </Badge>
-        )}
-        {product.is_flash_sale && (
-          <Badge className="absolute top-3 right-3 bg-gradient-gold text-gold-foreground border-0 gap-1">
-            <Flame className="h-3 w-3" />
-          </Badge>
-        )}
-      </div>
-      <div className="p-4">
-        <h3 className="font-medium leading-snug line-clamp-1">{product.name}</h3>
-        {product.short_description && (
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-            {product.short_description}
-          </p>
-        )}
-        <div className="flex items-end justify-between mt-3">
-          <div>
-            <div className="font-semibold">{formatNPR(product.price_npr)}</div>
-            {product.compare_at_price_npr && (
-              <div className="text-xs text-muted-foreground line-through">
-                {formatNPR(product.compare_at_price_npr)}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-0.5 text-xs text-muted-foreground">
-            <Star className="h-3 w-3 fill-gold text-gold" />
-            <span>4.8</span>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 

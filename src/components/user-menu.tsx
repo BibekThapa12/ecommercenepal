@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { LogOut, User as UserIcon, LayoutDashboard } from "lucide-react";
+import { LogOut, User as UserIcon, LayoutDashboard, Package, Heart, MapPin } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,19 @@ export function UserMenu() {
             )}
           </div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => navigate({ to: "/account/orders" })}>
+          <Package className="mr-2 h-4 w-4" />
+          My orders
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate({ to: "/account/wishlist" })}>
+          <Heart className="mr-2 h-4 w-4" />
+          Wishlist
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate({ to: "/account/addresses" })}>
+          <MapPin className="mr-2 h-4 w-4" />
+          Addresses
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         {isStaff && (
           <DropdownMenuItem onClick={() => navigate({ to: "/admin" })}>
