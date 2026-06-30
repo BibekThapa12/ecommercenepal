@@ -153,7 +153,7 @@ function RootComponent() {
         <AuthProvider>
           <AuthListener />
           <Outlet />
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="bottom-right" duration={1800} />
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
