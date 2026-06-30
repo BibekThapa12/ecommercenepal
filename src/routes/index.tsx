@@ -31,7 +31,10 @@ export const Route = createFileRoute("/")({
 
 type ProductRow = ProductCardData & {
   flash_sale_ends_at: string | null;
+  category_id: string | null;
 };
+
+type Category = { id: string; name: string; slug: string };
 
 function useCountdown(target: string | null) {
   const [now, setNow] = useState(() => Date.now());
@@ -49,13 +52,28 @@ function useCountdown(target: string | null) {
 }
 
 function Index() {
+  const [activeCat, setActiveCat] = useState<string | null>(null);
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["storefront-categories"],
+    queryFn: async (): Promise<Category[]> => {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("id, name, slug")
+        .eq("is_active", true)
+        .order("display_order");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["storefront-products"],
     queryFn: async (): Promise<ProductRow[]> => {
       const { data, error } = await supabase
         .from("products")
         .select(
-          "id, slug, name, short_description, price_npr, compare_at_price_npr, stock_quantity, is_flash_sale, flash_sale_ends_at, product_images(url, alt_text, is_primary)",
+          "id, slug, name, short_description, price_npr, compare_at_price_npr, stock_quantity, is_flash_sale, flash_sale_ends_at, category_id, product_images(url, alt_text, is_primary)",
         )
         .eq("status", "active")
         .order("created_at", { ascending: false });
@@ -65,6 +83,10 @@ function Index() {
   });
 
   const flashSales = useMemo(() => products.filter((p) => p.is_flash_sale), [products]);
+  const filtered = useMemo(
+    () => (activeCat ? products.filter((p) => p.category_id === activeCat) : products),
+    [products, activeCat],
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -74,20 +96,50 @@ function Index() {
         <FlashSaleSlider items={flashSales} loading={isLoading} />
 
         <section>
-          <div className="flex items-end justify-between mb-6">
+          <div className="flex items-end justify-between mb-6 gap-4 flex-wrap">
             <div>
-              <h2 className="font-display text-3xl font-semibold tracking-tight">All Products</h2>
+              <h2 className="font-display text-3xl font-semibold tracking-tight">Shop by Category</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                {products.length} curated items
+                {filtered.length} {activeCat ? "items in this category" : "curated items"}
               </p>
             </div>
           </div>
 
+          <div className="flex flex-wrap gap-2 mb-6">
+            <button
+              onClick={() => setActiveCat(null)}
+              className={`px-4 py-2 rounded-full text-sm font-medium border transition-base ${
+                activeCat === null
+                  ? "bg-primary text-primary-foreground border-primary shadow-elegant"
+                  : "bg-card hover:bg-accent"
+              }`}
+            >
+              All
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setActiveCat(c.id)}
+                className={`px-4 py-2 rounded-full text-sm font-medium border transition-base ${
+                  activeCat === c.id
+                    ? "bg-primary text-primary-foreground border-primary shadow-elegant"
+                    : "bg-card hover:bg-accent"
+                }`}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+
           {isLoading ? (
             <ProductGridSkeleton />
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              No products in this category yet.
+            </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
-              {products.map((p) => (
+              {filtered.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>
