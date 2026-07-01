@@ -214,7 +214,7 @@ function ProductsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="rounded-3xl border border-border/60 bg-card overflow-hidden">
-                    <div className="aspect-[4/3] bg-muted animate-pulse" />
+                    <div className="aspect-4/3 bg-muted animate-pulse" />
                     <div className="p-5 space-y-2">
                       <div className="h-3 bg-muted rounded animate-pulse w-1/3" />
                       <div className="h-4 bg-muted rounded animate-pulse" />

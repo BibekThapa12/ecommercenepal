@@ -47,7 +47,7 @@ export function ProductCard({ product, badge }: { product: ProductCardData; badg
 
   return (
     <div className="group relative rounded-3xl bg-card border border-border/60 overflow-hidden transition-base hover:shadow-elegant hover:-translate-y-1">
-      <Link to="/products" className="block relative aspect-[4/3] bg-muted overflow-hidden">
+      <Link to="/products" className="block relative aspect-4/3muted overflow-hidden">
         {img ? (
           <img
             src={img.url}
