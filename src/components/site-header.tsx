@@ -40,13 +40,13 @@ export function SiteHeader() {
         {/* Right cluster */}
         <div className="flex items-center gap-1 sm:gap-1.5 justify-self-end">
           <Button variant="ghost" size="icon" aria-label="Search" className="rounded-full">
-            <Search className="h-4.5 w-4.5" />
+            <Search className="h-5 w-5" />
           </Button>
           {user && (
             <>
               <Button asChild variant="ghost" size="icon" aria-label="Wishlist" className="rounded-full relative">
                 <Link to="/account/wishlist">
-                  <Heart className="h-4.5 w-4.5" />
+                  <Heart className="h-5 w-5" />
                   {wishlist.ids.size > 0 && (
                     <Badge className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 grid place-items-center rounded-full bg-gold text-gold-foreground border-0 text-[10px] font-semibold">
                       {wishlist.ids.size}
@@ -56,7 +56,7 @@ export function SiteHeader() {
               </Button>
               <Button asChild variant="ghost" size="icon" aria-label="Cart" className="rounded-full relative">
                 <Link to="/cart">
-                  <ShoppingCart className="h-4.5 w-4.5" />
+                  <ShoppingCart className="h-5 w-5" />
                   {cart.count > 0 && (
                     <Badge className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 grid place-items-center rounded-full bg-gold text-gold-foreground border-0 text-[10px] font-semibold">
                       {cart.count}
