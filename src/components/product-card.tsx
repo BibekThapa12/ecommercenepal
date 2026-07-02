@@ -100,11 +100,12 @@ export function ProductCard({ product, badge }: { product: ProductCardData; badg
         </button>
       </Link>
 
-      <div className="p-5">
+      <Link to="/products/$slug" params={{ slug: product.slug }} className="block p-5">
         <div className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
           {brandName}
         </div>
         <h3 className="font-display text-lg leading-snug mt-1 line-clamp-1">{product.name}</h3>
+
 
         <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-0.5">
