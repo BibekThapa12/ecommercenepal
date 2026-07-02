@@ -84,7 +84,7 @@ export const Route = createFileRoute("/products/$slug")({
 });
 
 function ProductDetailsPage() {
-  const product = Route.useLoaderData();
+  const product = Route.useLoaderData() as ProductDetail;
   const { user } = useAuth();
   const navigate = useNavigate();
   const cart = useCart();
