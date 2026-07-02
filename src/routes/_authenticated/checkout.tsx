@@ -22,10 +22,12 @@ import { SiteHeader } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatNPR, PAYMENT_METHODS, type PaymentMethod } from "@/lib/commerce";
-import { useCart } from "@/lib/use-commerce";
+import { useCart, type ProductLite } from "@/lib/use-commerce";
 
 export const Route = createFileRoute("/_authenticated/checkout")({
-  head: () => ({ meta: [{ title: "Checkout — Reactify Commerce" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({
+    meta: [{ title: "Checkout — Reactify Commerce" }, { name: "robots", content: "noindex" }],
+  }),
   component: CheckoutPage,
 });
 
@@ -42,6 +44,13 @@ type Address = {
   landmark: string | null;
   is_default: boolean;
   label: string | null;
+};
+
+type CheckoutCartRow = {
+  id: string;
+  product_id: string;
+  quantity: number;
+  product: ProductLite | null;
 };
 
 function CheckoutPage() {
@@ -77,7 +86,39 @@ function CheckoutPage() {
     mutationFn: async () => {
       if (!user) throw new Error("Sign in required");
       if (!selectedAddress) throw new Error("Add a shipping address");
-      if (cart.items.length === 0) throw new Error("Your cart is empty");
+
+      const { data: freshCart, error: cartError } = await supabase
+        .from("cart_items")
+        .select(
+          "id, product_id, quantity, product:products(id, name, slug, price_npr, compare_at_price_npr, stock_quantity, product_images(url, alt_text, is_primary))",
+        )
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (cartError) throw cartError;
+
+      const cartItems = (freshCart ?? []) as unknown as CheckoutCartRow[];
+      if (cartItems.length === 0) throw new Error("Your cart is empty");
+
+      const purchasableItems = cartItems.filter((item) => item.product);
+      if (purchasableItems.length !== cartItems.length) {
+        throw new Error("Some cart items are no longer available. Remove them and try again.");
+      }
+
+      const invalidStockItem = purchasableItems.find(
+        (item) => item.product!.stock_quantity <= 0 || item.quantity > item.product!.stock_quantity,
+      );
+      if (invalidStockItem) {
+        throw new Error(`${invalidStockItem.product!.name} does not have enough stock.`);
+      }
+
+      const orderSubtotal = purchasableItems.reduce(
+        (sum, item) => sum + Number(item.product!.price_npr) * item.quantity,
+        0,
+      );
+      if (orderSubtotal <= 0) throw new Error("Order total must be greater than zero.");
+
+      const orderShipping = orderSubtotal >= 5000 ? 0 : 150;
+      const orderTotal = orderSubtotal + orderShipping;
 
       const shippingAddress = {
         recipient_name: selectedAddress.recipient_name,
@@ -95,11 +136,11 @@ function CheckoutPage() {
         .from("orders")
         .insert({
           user_id: user.id,
-          subtotal_npr: cart.subtotal,
-          shipping_npr: shipping,
+          subtotal_npr: orderSubtotal,
+          shipping_npr: orderShipping,
           tax_npr: 0,
           discount_npr: 0,
-          total_npr: total,
+          total_npr: orderTotal,
           payment_method: method,
           payment_status: "pending",
           status: "pending",
@@ -110,17 +151,15 @@ function CheckoutPage() {
         .single();
       if (oerr) throw oerr;
 
-      const items = cart.items
-        .filter((i) => i.product)
-        .map((i) => ({
-          order_id: order.id,
-          product_id: i.product_id,
-          product_name: i.product!.name,
-          quantity: i.quantity,
-          unit_price_npr: i.product!.price_npr,
-          line_total_npr: i.product!.price_npr * i.quantity,
-          image_url: i.product!.product_images[0]?.url ?? null,
-        }));
+      const items = purchasableItems.map((i) => ({
+        order_id: order.id,
+        product_id: i.product_id,
+        product_name: i.product!.name,
+        quantity: i.quantity,
+        unit_price_npr: Number(i.product!.price_npr),
+        line_total_npr: Number(i.product!.price_npr) * i.quantity,
+        image_url: i.product!.product_images[0]?.url ?? null,
+      }));
       const { error: ierr } = await supabase.from("order_items").insert(items);
       if (ierr) throw ierr;
 
@@ -175,7 +214,11 @@ function CheckoutPage() {
               ) : (addressesQ.data?.length ?? 0) === 0 ? (
                 <p className="text-sm text-muted-foreground">Add a delivery address to continue.</p>
               ) : (
-                <RadioGroup value={addressId ?? ""} onValueChange={setAddressId} className="space-y-2">
+                <RadioGroup
+                  value={addressId ?? ""}
+                  onValueChange={setAddressId}
+                  className="space-y-2"
+                >
                   {addressesQ.data!.map((a) => (
                     <label
                       key={a.id}
@@ -188,11 +231,11 @@ function CheckoutPage() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{a.recipient_name}</span>
                           {a.label && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-muted">{a.label}</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-muted">
+                              {a.label}
+                            </span>
                           )}
-                          {a.is_default && (
-                            <span className="text-xs text-primary">Default</span>
-                          )}
+                          {a.is_default && <span className="text-xs text-primary">Default</span>}
                         </div>
                         <div className="text-sm text-muted-foreground mt-1">
                           {a.street_address}
@@ -260,7 +303,8 @@ function CheckoutPage() {
               {cart.items.map((row) => (
                 <div key={row.id} className="flex justify-between text-sm">
                   <span className="truncate pr-2">
-                    {row.product?.name} <span className="text-muted-foreground">× {row.quantity}</span>
+                    {row.product?.name}{" "}
+                    <span className="text-muted-foreground">× {row.quantity}</span>
                   </span>
                   <span className="tabular-nums">
                     {formatNPR((row.product?.price_npr ?? 0) * row.quantity)}
@@ -296,7 +340,9 @@ function CheckoutPage() {
 
 function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
-    <div className={`flex justify-between ${bold ? "text-base font-semibold" : "text-muted-foreground"}`}>
+    <div
+      className={`flex justify-between ${bold ? "text-base font-semibold" : "text-muted-foreground"}`}
+    >
       <span>{label}</span>
       <span className={bold ? "text-foreground" : ""}>{value}</span>
     </div>
@@ -370,19 +416,59 @@ function AddressDialog() {
           <DialogTitle>Add shipping address</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Full name" v={form.recipient_name} onChange={(v) => setForm({ ...form, recipient_name: v })} className="col-span-2" />
-          <Field label="Phone" v={form.phone} onChange={(v) => setForm({ ...form, phone: v })} className="col-span-2" />
-          <Field label="Street address" v={form.street_address} onChange={(v) => setForm({ ...form, street_address: v })} className="col-span-2" />
-          <Field label="Municipality" v={form.municipality} onChange={(v) => setForm({ ...form, municipality: v })} />
+          <Field
+            label="Full name"
+            v={form.recipient_name}
+            onChange={(v) => setForm({ ...form, recipient_name: v })}
+            className="col-span-2"
+          />
+          <Field
+            label="Phone"
+            v={form.phone}
+            onChange={(v) => setForm({ ...form, phone: v })}
+            className="col-span-2"
+          />
+          <Field
+            label="Street address"
+            v={form.street_address}
+            onChange={(v) => setForm({ ...form, street_address: v })}
+            className="col-span-2"
+          />
+          <Field
+            label="Municipality"
+            v={form.municipality}
+            onChange={(v) => setForm({ ...form, municipality: v })}
+          />
           <Field label="Ward" v={form.ward} onChange={(v) => setForm({ ...form, ward: v })} />
-          <Field label="District" v={form.district} onChange={(v) => setForm({ ...form, district: v })} />
-          <Field label="Province" v={form.province} onChange={(v) => setForm({ ...form, province: v })} />
-          <Field label="Postal code" v={form.postal_code} onChange={(v) => setForm({ ...form, postal_code: v })} />
+          <Field
+            label="District"
+            v={form.district}
+            onChange={(v) => setForm({ ...form, district: v })}
+          />
+          <Field
+            label="Province"
+            v={form.province}
+            onChange={(v) => setForm({ ...form, province: v })}
+          />
+          <Field
+            label="Postal code"
+            v={form.postal_code}
+            onChange={(v) => setForm({ ...form, postal_code: v })}
+          />
           <Field label="Label" v={form.label} onChange={(v) => setForm({ ...form, label: v })} />
-          <Field label="Landmark" v={form.landmark} onChange={(v) => setForm({ ...form, landmark: v })} className="col-span-2" />
+          <Field
+            label="Landmark"
+            v={form.landmark}
+            onChange={(v) => setForm({ ...form, landmark: v })}
+            className="col-span-2"
+          />
         </div>
         <DialogFooter>
-          <Button onClick={() => save.mutate()} disabled={save.isPending} className="bg-gradient-primary">
+          <Button
+            onClick={() => save.mutate()}
+            disabled={save.isPending}
+            className="bg-gradient-primary"
+          >
             {save.isPending ? "Saving…" : "Save address"}
           </Button>
         </DialogFooter>

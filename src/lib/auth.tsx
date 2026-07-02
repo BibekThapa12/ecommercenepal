@@ -21,13 +21,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rolesLoading, setRolesLoading] = useState(false);
 
   useEffect(() => {
     // Subscribe FIRST, then read existing session — avoids race condition.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      if (!newSession) setRoles([]);
+      if (!newSession) {
+        setRoles([]);
+        setRolesLoading(false);
+      }
     });
 
     supabase.auth.getSession().then(({ data }) => {
@@ -40,25 +44,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     if (!user) {
       setRoles([]);
+      setRolesLoading(false);
       return;
     }
+    setRolesLoading(true);
     // Defer to avoid blocking the auth callback.
     setTimeout(async () => {
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-      setRoles((data ?? []).map((r) => r.role as AppRole));
+      const { data } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
+      if (!cancelled) {
+        setRoles((data ?? []).map((r) => r.role as AppRole));
+        setRolesLoading(false);
+      }
     }, 0);
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   const value: AuthContextValue = {
     user,
     session,
     roles,
-    loading,
+    loading: loading || (!!user && rolesLoading),
     hasRole: (role) => roles.includes(role),
     isStaff: roles.some((r) => r === "admin" || r === "manager" || r === "staff"),
     signOut: async () => {

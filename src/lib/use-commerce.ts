@@ -41,6 +41,7 @@ export function useCart() {
       const { data, error } = await supabase
         .from("cart_items")
         .select(`id, product_id, quantity, product:products(${PRODUCT_SELECT})`)
+        .eq("user_id", user!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as CartRow[];
@@ -61,7 +62,8 @@ export function useCart() {
         const { error } = await supabase
           .from("cart_items")
           .update({ quantity: Math.min(99, existing.quantity + qty) })
-          .eq("id", existing.id);
+          .eq("id", existing.id)
+          .eq("user_id", user.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
@@ -79,24 +81,33 @@ export function useCart() {
 
   const setQty = useMutation({
     mutationFn: async (vars: { id: string; quantity: number }) => {
+      if (!user) throw new Error("Sign in required");
       const { error } = await supabase
         .from("cart_items")
         .update({ quantity: Math.max(1, Math.min(99, vars.quantity)) })
-        .eq("id", vars.id);
+        .eq("id", vars.id)
+        .eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cart"] }),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("cart_items").delete().eq("id", id);
+      if (!user) throw new Error("Sign in required");
+      const { error } = await supabase
+        .from("cart_items")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cart"] });
       toast.success("Removed from cart");
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const clear = useMutation({
@@ -106,6 +117,7 @@ export function useCart() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cart"] }),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const items = query.data ?? [];
@@ -126,6 +138,7 @@ export function useWishlist() {
       const { data, error } = await supabase
         .from("wishlist_items")
         .select(`id, product_id, product:products(${PRODUCT_SELECT})`)
+        .eq("user_id", user!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as WishlistRow[];
@@ -142,7 +155,11 @@ export function useWishlist() {
         .eq("product_id", productId)
         .maybeSingle();
       if (existing) {
-        const { error } = await supabase.from("wishlist_items").delete().eq("id", existing.id);
+        const { error } = await supabase
+          .from("wishlist_items")
+          .delete()
+          .eq("id", existing.id)
+          .eq("user_id", user.id);
         if (error) throw error;
         return { removed: true };
       }
@@ -161,10 +178,16 @@ export function useWishlist() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("wishlist_items").delete().eq("id", id);
+      if (!user) throw new Error("Sign in required");
+      const { error } = await supabase
+        .from("wishlist_items")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wishlist"] }),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const items = query.data ?? [];

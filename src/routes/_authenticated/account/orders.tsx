@@ -24,11 +24,15 @@ type OrderRow = {
 const STATUS_TONE: Record<OrderStatus, string> = {
   pending: "bg-warning/15 text-warning-foreground border-warning/30",
   confirmed: "bg-primary/10 text-primary border-primary/20",
-  processing: "bg-primary/10 text-primary border-primary/20",
+  packed: "bg-primary/10 text-primary border-primary/20",
+  ready_to_ship: "bg-primary/10 text-primary border-primary/20",
   shipped: "bg-accent text-accent-foreground border-border",
+  out_for_delivery: "bg-accent text-accent-foreground border-border",
   delivered: "bg-success/15 text-success border-success/30",
   cancelled: "bg-destructive/10 text-destructive border-destructive/20",
+  returned: "bg-destructive/10 text-destructive border-destructive/20",
   refunded: "bg-muted text-muted-foreground border-border",
+  failed: "bg-destructive/10 text-destructive border-destructive/20",
 };
 
 function OrdersList() {
@@ -39,7 +43,9 @@ function OrdersList() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, order_number, status, total_npr, created_at, order_items(product_name, quantity, image_url)")
+        .select(
+          "id, order_number, status, total_npr, created_at, order_items(product_name, quantity, image_url)",
+        )
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as OrderRow[];
@@ -57,7 +63,9 @@ function OrdersList() {
           <Package className="h-7 w-7 text-muted-foreground" />
         </div>
         <h2 className="mt-4 font-display text-xl">No orders yet</h2>
-        <p className="text-sm text-muted-foreground mt-1">When you place your first order, it'll show up here.</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          When you place your first order, it'll show up here.
+        </p>
         <Button asChild className="mt-6 bg-gradient-primary">
           <Link to="/">Browse products</Link>
         </Button>
@@ -89,7 +97,9 @@ function OrdersList() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs text-muted-foreground">{order.order_number}</span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {order.order_number}
+                  </span>
                   <Badge variant="outline" className={STATUS_TONE[order.status]}>
                     {ORDER_STATUS_LABEL[order.status]}
                   </Badge>
@@ -98,7 +108,8 @@ function OrdersList() {
                   {order.order_items.map((i) => i.product_name).join(", ")}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {totalItems} item{totalItems === 1 ? "" : "s"} · {new Date(order.created_at).toLocaleDateString()}
+                  {totalItems} item{totalItems === 1 ? "" : "s"} ·{" "}
+                  {new Date(order.created_at).toLocaleDateString()}
                 </div>
               </div>
               <div className="flex items-center justify-between sm:justify-end gap-4">

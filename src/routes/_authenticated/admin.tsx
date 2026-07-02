@@ -1,14 +1,11 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Package,
   ShoppingCart,
   Users,
-  Tag,
   FolderTree,
-  Ticket,
-  BarChart3,
-  Settings,
   LogOut,
   ShoppingBag,
 } from "lucide-react";
@@ -35,28 +32,28 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
-    meta: [
-      { title: "Admin — Reactify Commerce" },
-      { name: "robots", content: "noindex" },
-    ],
+    meta: [{ title: "Admin — Reactify Commerce" }, { name: "robots", content: "noindex" }],
   }),
   component: AdminLayout,
 });
 
-const navGroups = [
+type AdminNavItem = {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  exact?: boolean;
+};
+
+const navGroups: { label: string; items: AdminNavItem[] }[] = [
   {
     label: "Overview",
-    items: [
-      { title: "Dashboard", url: "/admin", icon: LayoutDashboard, exact: true },
-      { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
-    ],
+    items: [{ title: "Dashboard", url: "/admin", icon: LayoutDashboard, exact: true }],
   },
   {
     label: "Catalog",
     items: [
       { title: "Products", url: "/admin/products", icon: Package },
       { title: "Categories", url: "/admin/categories", icon: FolderTree },
-      { title: "Brands", url: "/admin/brands", icon: Tag },
     ],
   },
   {
@@ -64,12 +61,7 @@ const navGroups = [
     items: [
       { title: "Orders", url: "/admin/orders", icon: ShoppingCart },
       { title: "Customers", url: "/admin/customers", icon: Users },
-      { title: "Coupons", url: "/admin/coupons", icon: Ticket },
     ],
-  },
-  {
-    label: "System",
-    items: [{ title: "Settings", url: "/admin/settings", icon: Settings }],
   },
 ];
 
@@ -78,14 +70,19 @@ function AdminLayout() {
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
 
+  if (loading) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
   // Guard: must be staff or above. Customers bounce home.
-  if (!loading && user && !isStaff) {
+  if (user && !isStaff) {
     return (
       <div className="min-h-screen grid place-items-center bg-background px-4">
         <div className="max-w-md text-center space-y-4">
           <h1 className="font-display text-3xl">Access restricted</h1>
           <p className="text-muted-foreground">
-            Your account doesn't have permission to access the admin area. Contact your administrator if this is unexpected.
+            Your account doesn't have permission to access the admin area. Contact your
+            administrator if this is unexpected.
           </p>
           <Button onClick={() => navigate({ to: "/" })}>Back to store</Button>
         </div>
@@ -93,9 +90,10 @@ function AdminLayout() {
     );
   }
 
-  const initials = (user?.user_metadata?.full_name as string | undefined)?.[0]?.toUpperCase()
-    ?? user?.email?.[0]?.toUpperCase()
-    ?? "U";
+  const initials =
+    (user?.user_metadata?.full_name as string | undefined)?.[0]?.toUpperCase() ??
+    user?.email?.[0]?.toUpperCase() ??
+    "U";
 
   async function handleSignOut() {
     await signOut();

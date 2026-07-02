@@ -8,7 +8,9 @@ import { formatNPR } from "@/lib/commerce";
 import { useCart } from "@/lib/use-commerce";
 
 export const Route = createFileRoute("/_authenticated/cart")({
-  head: () => ({ meta: [{ title: "Cart — Reactify Commerce" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({
+    meta: [{ title: "Cart — Reactify Commerce" }, { name: "robots", content: "noindex" }],
+  }),
   component: CartPage,
 });
 
@@ -23,7 +25,9 @@ function CartPage() {
       <main className="container mx-auto px-4 py-8 max-w-6xl">
         <h1 className="font-display text-3xl font-semibold tracking-tight">Your cart</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          {cart.count === 0 ? "Your cart is empty." : `${cart.count} item${cart.count === 1 ? "" : "s"}`}
+          {cart.count === 0
+            ? "Your cart is empty."
+            : `${cart.count} item${cart.count === 1 ? "" : "s"}`}
         </p>
 
         {cart.isLoading ? (
@@ -46,10 +50,17 @@ function CartPage() {
                 if (!p) return null;
                 const img = p.product_images.find((i) => i.is_primary) ?? p.product_images[0];
                 return (
-                  <div key={row.id} className="flex gap-4 rounded-2xl border bg-card p-4 shadow-card">
+                  <div
+                    key={row.id}
+                    className="flex gap-4 rounded-2xl border bg-card p-4 shadow-card"
+                  >
                     <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted">
                       {img && (
-                        <img src={img.url} alt={img.alt_text ?? p.name} className="h-full w-full object-cover" />
+                        <img
+                          src={img.url}
+                          alt={img.alt_text ?? p.name}
+                          className="h-full w-full object-cover"
+                        />
                       )}
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col">
@@ -58,27 +69,37 @@ function CartPage() {
                         <button
                           aria-label="Remove"
                           className="text-muted-foreground hover:text-destructive transition-base"
+                          disabled={cart.remove.isPending}
                           onClick={() => cart.remove.mutate(row.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
-                      <div className="text-sm text-muted-foreground mt-0.5">{formatNPR(p.price_npr)}</div>
+                      <div className="text-sm text-muted-foreground mt-0.5">
+                        {formatNPR(p.price_npr)}
+                      </div>
                       <div className="mt-auto flex items-center justify-between">
                         <div className="inline-flex items-center rounded-full border bg-background">
                           <button
                             aria-label="Decrease"
                             className="grid h-8 w-8 place-items-center rounded-l-full hover:bg-muted transition-base disabled:opacity-40"
-                            disabled={row.quantity <= 1}
-                            onClick={() => cart.setQty.mutate({ id: row.id, quantity: row.quantity - 1 })}
+                            disabled={row.quantity <= 1 || cart.setQty.isPending}
+                            onClick={() =>
+                              cart.setQty.mutate({ id: row.id, quantity: row.quantity - 1 })
+                            }
                           >
                             <Minus className="h-3.5 w-3.5" />
                           </button>
-                          <span className="w-8 text-center text-sm font-medium tabular-nums">{row.quantity}</span>
+                          <span className="w-8 text-center text-sm font-medium tabular-nums">
+                            {row.quantity}
+                          </span>
                           <button
                             aria-label="Increase"
-                            className="grid h-8 w-8 place-items-center rounded-r-full hover:bg-muted transition-base"
-                            onClick={() => cart.setQty.mutate({ id: row.id, quantity: row.quantity + 1 })}
+                            className="grid h-8 w-8 place-items-center rounded-r-full hover:bg-muted transition-base disabled:opacity-40"
+                            disabled={cart.setQty.isPending || row.quantity >= p.stock_quantity}
+                            onClick={() =>
+                              cart.setQty.mutate({ id: row.id, quantity: row.quantity + 1 })
+                            }
                           >
                             <Plus className="h-3.5 w-3.5" />
                           </button>
@@ -119,7 +140,17 @@ function CartPage() {
   );
 }
 
-function Row({ label, value, muted, bold }: { label: string; value: string; muted?: boolean; bold?: boolean }) {
+function Row({
+  label,
+  value,
+  muted,
+  bold,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+  bold?: boolean;
+}) {
   return (
     <div className={`flex items-center justify-between ${bold ? "text-base font-semibold" : ""}`}>
       <span className={muted ? "text-muted-foreground" : ""}>{label}</span>
