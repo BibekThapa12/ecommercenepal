@@ -431,6 +431,13 @@ function AdminProducts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <VariantManagerDialog
+        productId={variantFor?.id ?? null}
+        productName={variantFor?.name ?? ""}
+        open={!!variantFor}
+        onOpenChange={(v) => !v && setVariantFor(null)}
+      />
     </div>
   );
 }
