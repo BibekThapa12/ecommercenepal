@@ -91,6 +91,7 @@ function AdminProducts() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(empty);
   const [filterCat, setFilterCat] = useState<string>("all");
+  const [variantFor, setVariantFor] = useState<{ id: string; name: string } | null>(null);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["admin-categories-lite"],
