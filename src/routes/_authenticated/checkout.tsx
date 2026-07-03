@@ -26,7 +26,7 @@ import { useCart, type ProductLite } from "@/lib/use-commerce";
 
 export const Route = createFileRoute("/_authenticated/checkout")({
   head: () => ({
-    meta: [{ title: "Checkout — Reactify Commerce" }, { name: "robots", content: "noindex" }],
+    meta: [{ title: "Checkout - Reactify Commerce" }, { name: "robots", content: "noindex" }],
   }),
   component: CheckoutPage,
 });
@@ -333,13 +333,13 @@ function CheckoutPage() {
               {cart.items.map((row) => {
                 const price = Number(row.variant?.price_npr ?? row.product?.price_npr ?? 0);
                 const opts = row.selected_options ?? {};
-                const label = Object.entries(opts).map(([k, v]) => `${v}`).join(" / ");
+                const label = Object.entries(opts).map(([, v]) => `${v}`).join(" / ");
                 return (
                   <div key={row.id} className="flex justify-between text-sm">
                     <span className="truncate pr-2">
                       {row.product?.name}
-                      {label && <span className="text-muted-foreground"> · {label}</span>}{" "}
-                      <span className="text-muted-foreground">× {row.quantity}</span>
+                      {label && <span className="text-muted-foreground"> - {label}</span>}{" "}
+                      <span className="text-muted-foreground">x {row.quantity}</span>
                     </span>
                     <span className="tabular-nums">{formatNPR(price * row.quantity)}</span>
                   </div>
@@ -360,7 +360,9 @@ function CheckoutPage() {
               disabled={!selectedAddress || place.isPending}
               onClick={() => place.mutate()}
             >
-              {place.isPending ? "Placing order…" : `Place order · ${formatNPR(total)}`}
+              {place.isPending
+                ? "Placing order..."
+                : `Place order - ${formatNPR(total)}`}
             </Button>
             <p className="text-xs text-muted-foreground mt-3 flex items-start gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0 text-success" />
@@ -504,7 +506,7 @@ function AddressDialog() {
             disabled={save.isPending}
             className="bg-gradient-primary"
           >
-            {save.isPending ? "Saving…" : "Save address"}
+            {save.isPending ? "Saving..." : "Save address"}
           </Button>
         </DialogFooter>
       </DialogContent>

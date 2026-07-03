@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -39,6 +39,16 @@ type ProductRow = ProductCardData & {
 type Category = { id: string; name: string; slug: string };
 
 function ProductsPage() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  if (pathname !== "/products") {
+    return <Outlet />;
+  }
+
+  return <ProductListingPage />;
+}
+
+function ProductListingPage() {
   const { category: catSlug } = Route.useSearch();
   const [query, setQuery] = useState("");
   const [minPrice, setMinPrice] = useState(0);
@@ -65,7 +75,7 @@ function ProductsPage() {
       const { data, error } = await supabase
         .from("products")
         .select(
-          "id, slug, name, short_description, price_npr, compare_at_price_npr, stock_quantity, is_flash_sale, category_id, product_images(url, alt_text, is_primary)",
+          "id, slug, name, short_description, price_npr, compare_at_price_npr, stock_quantity, is_flash_sale, category_id, product_images(url, alt_text, is_primary), product_variants(id, is_active)",
         )
         .eq("status", "active")
         .order("created_at", { ascending: false });

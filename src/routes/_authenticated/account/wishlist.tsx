@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Heart, ShoppingBag, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ export const Route = createFileRoute("/_authenticated/account/wishlist")({
 function WishlistPage() {
   const wishlist = useWishlist();
   const cart = useCart();
+  const navigate = useNavigate();
 
   if (wishlist.isLoading) return <div className="h-64 rounded-2xl bg-muted animate-pulse" />;
 
@@ -36,6 +37,7 @@ function WishlistPage() {
         const p = row.product;
         if (!p) return null;
         const img = p.product_images.find((i) => i.is_primary) ?? p.product_images[0];
+        const hasVariants = (p.product_variants ?? []).some((variant) => variant.is_active);
         return (
           <div key={row.id} className="rounded-2xl border bg-card overflow-hidden shadow-card group">
             <div className="aspect-square bg-muted overflow-hidden relative">
@@ -58,7 +60,13 @@ function WishlistPage() {
               <Button
                 size="sm"
                 className="w-full bg-gradient-primary hover:opacity-90"
-                onClick={() => cart.add.mutate({ productId: p.id })}
+                onClick={() => {
+                  if (hasVariants) {
+                    navigate({ to: "/products/$slug", params: { slug: p.slug } });
+                    return;
+                  }
+                  cart.add.mutate({ productId: p.id });
+                }}
                 disabled={cart.add.isPending}
               >
                 <ShoppingBag className="h-3.5 w-3.5" /> Move to cart

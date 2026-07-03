@@ -9,7 +9,7 @@ import { useCart } from "@/lib/use-commerce";
 
 export const Route = createFileRoute("/_authenticated/cart")({
   head: () => ({
-    meta: [{ title: "Cart — Reactify Commerce" }, { name: "robots", content: "noindex" }],
+    meta: [{ title: "Cart - Reactify Commerce" }, { name: "robots", content: "noindex" }],
   }),
   component: CartPage,
 });
@@ -48,12 +48,18 @@ function CartPage() {
               {cart.items.map((row) => {
                 const p = row.product;
                 if (!p) return null;
-                const variantImg = row.variant?.product_images?.find((i) => i.is_primary) ?? row.variant?.product_images?.[0];
-                const img = variantImg ?? p.product_images.find((i) => i.is_primary) ?? p.product_images[0];
+                const variantImg =
+                  row.variant?.product_images?.find((i) => i.is_primary) ??
+                  row.variant?.product_images?.[0];
+                const img =
+                  variantImg ?? p.product_images.find((i) => i.is_primary) ?? p.product_images[0];
                 const unitPrice = Number(row.variant?.price_npr ?? p.price_npr);
                 const stock = row.variant ? row.variant.stock_quantity : p.stock_quantity;
                 const opts = row.selected_options ?? row.variant?.options ?? {};
-                const optLabel = Object.entries(opts).map(([k, v]) => `${k}: ${v}`).join(" · ");
+                const optLabel = Object.entries(opts)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join(" - ");
+
                 return (
                   <div
                     key={row.id}
@@ -81,10 +87,14 @@ function CartPage() {
                         </button>
                       </div>
                       {optLabel && (
-                        <div className="text-xs text-muted-foreground mt-0.5 capitalize">{optLabel}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5 capitalize">
+                          {optLabel}
+                        </div>
                       )}
                       {row.variant?.sku && (
-                        <div className="text-[11px] text-muted-foreground font-mono">SKU: {row.variant.sku}</div>
+                        <div className="text-[11px] text-muted-foreground font-mono">
+                          SKU: {row.variant.sku}
+                        </div>
                       )}
                       <div className="text-sm text-muted-foreground mt-0.5">
                         {formatNPR(unitPrice)}
@@ -120,7 +130,6 @@ function CartPage() {
                     </div>
                   </div>
                 );
-
               })}
             </div>
 

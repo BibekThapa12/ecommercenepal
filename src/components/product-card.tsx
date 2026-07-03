@@ -17,6 +17,7 @@ export type ProductCardData = {
   compare_at_price_npr: number | null;
   is_flash_sale: boolean;
   product_images: { url: string; alt_text: string | null; is_primary: boolean }[];
+  product_variants?: { id: string; is_active: boolean }[];
   brand?: { name: string } | null;
   stock_quantity?: number;
 };
@@ -36,6 +37,7 @@ export function ProductCard({ product, badge }: { product: ProductCardData; badg
   const saved = wishlist.ids.has(product.id);
   const outOfStock = product.stock_quantity === 0;
   const brandName = product.brand?.name ?? "Reactify";
+  const hasVariants = (product.product_variants ?? []).some((variant) => variant.is_active);
 
   function requireAuth(action: () => void) {
     if (!user) {
@@ -129,6 +131,10 @@ export function ProductCard({ product, badge }: { product: ProductCardData; badg
             size="sm"
             onClick={(e) => {
               e.preventDefault();
+              if (hasVariants) {
+                navigate({ to: "/products/$slug", params: { slug: product.slug } });
+                return;
+              }
               requireAuth(() => cart.add.mutate({ productId: product.id }));
             }}
             disabled={cart.add.isPending || outOfStock}

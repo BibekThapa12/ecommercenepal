@@ -18,7 +18,13 @@ type OrderRow = {
   status: OrderStatus;
   total_npr: number;
   created_at: string;
-  order_items: { product_name: string; quantity: number; image_url: string | null }[];
+  order_items: {
+    product_name: string;
+    quantity: number;
+    image_url: string | null;
+    variant_label: string | null;
+    selected_options: Record<string, string>;
+  }[];
 };
 
 const STATUS_TONE: Record<OrderStatus, string> = {
@@ -44,7 +50,7 @@ function OrdersList() {
       const { data, error } = await supabase
         .from("orders")
         .select(
-          "id, order_number, status, total_npr, created_at, order_items(product_name, quantity, image_url)",
+          "id, order_number, status, total_npr, created_at, order_items(product_name, quantity, image_url, variant_label, selected_options)",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -105,7 +111,16 @@ function OrdersList() {
                   </Badge>
                 </div>
                 <div className="font-medium mt-1 truncate">
-                  {order.order_items.map((i) => i.product_name).join(", ")}
+                  {order.order_items
+                    .map((i) => {
+                      const variant =
+                        i.variant_label ||
+                        Object.entries(i.selected_options ?? {})
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(", ");
+                      return variant ? `${i.product_name} (${variant})` : i.product_name;
+                    })
+                    .join(", ")}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {totalItems} item{totalItems === 1 ? "" : "s"} ·{" "}

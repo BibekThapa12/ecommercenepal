@@ -41,6 +41,13 @@ export const Route = createFileRoute("/_authenticated/admin/products")({
 });
 
 type Category = { id: string; name: string };
+type ProductVariantSummary = {
+  id: string;
+  sku: string | null;
+  options: Record<string, string>;
+  stock_quantity: number;
+  is_active: boolean;
+};
 type Product = {
   id: string;
   name: string;
@@ -51,8 +58,12 @@ type Product = {
   stock_quantity: number;
   status: string;
   is_flash_sale: boolean;
+  is_featured: boolean;
   category_id: string | null;
   image_url: string | null;
+  product_variants: ProductVariantSummary[];
+  sales_quantity: number;
+  sales_revenue_npr: number;
 };
 
 type FormState = {
@@ -65,6 +76,7 @@ type FormState = {
   stock_quantity: number;
   status: "active" | "draft";
   is_flash_sale: boolean;
+  is_featured: boolean;
   category_id: string | null;
   image_url: string;
 };
@@ -78,12 +90,19 @@ const empty: FormState = {
   stock_quantity: 0,
   status: "active",
   is_flash_sale: false,
+  is_featured: false,
   category_id: null,
   image_url: "",
 };
 
 function slugify(s: string) {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function stringifyOptions(o: Record<string, string>): string {
+  return Object.entries(o)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(", ");
 }
 
 function AdminProducts() {
@@ -108,15 +127,42 @@ function AdminProducts() {
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["admin-products"],
     queryFn: async (): Promise<Product[]> => {
-      const { data, error } = await supabase
-        .from("products")
-        .select(
-          "id, name, slug, short_description, price_npr, compare_at_price_npr, stock_quantity, status, is_flash_sale, category_id, product_images(url, is_primary)",
-        )
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []).map((p: any) => ({
+      const [productsRes, salesRes] = await Promise.all([
+        supabase
+          .from("products")
+          .select(
+            "id, name, slug, short_description, price_npr, compare_at_price_npr, stock_quantity, status, is_flash_sale, is_featured, category_id, product_images(url, is_primary), product_variants(id, sku, options, stock_quantity, is_active)",
+          )
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("order_items")
+          .select("product_id, quantity, line_total_npr, order:orders(status)"),
+      ]);
+
+      if (productsRes.error) throw productsRes.error;
+      if (salesRes.error) throw salesRes.error;
+
+      const salesByProduct = new Map<
+        string,
+        { sales_quantity: number; sales_revenue_npr: number }
+      >();
+      for (const row of salesRes.data ?? []) {
+        const item = row as any;
+        if (!item.product_id || item.order?.status !== "delivered") continue;
+        const current = salesByProduct.get(item.product_id) ?? {
+          sales_quantity: 0,
+          sales_revenue_npr: 0,
+        };
+        current.sales_quantity += Number(item.quantity ?? 0);
+        current.sales_revenue_npr += Number(item.line_total_npr ?? 0);
+        salesByProduct.set(item.product_id, current);
+      }
+
+      return (productsRes.data ?? []).map((p: any) => ({
         ...p,
+        product_variants: p.product_variants ?? [],
+        sales_quantity: salesByProduct.get(p.id)?.sales_quantity ?? 0,
+        sales_revenue_npr: salesByProduct.get(p.id)?.sales_revenue_npr ?? 0,
         image_url:
           p.product_images?.find((i: any) => i.is_primary)?.url ??
           p.product_images?.[0]?.url ??
@@ -138,6 +184,7 @@ function AdminProducts() {
         stock_quantity: f.stock_quantity,
         status: f.status,
         is_flash_sale: f.is_flash_sale,
+        is_featured: f.is_featured,
         category_id: f.category_id,
       };
       let productId = f.id;
@@ -171,6 +218,21 @@ function AdminProducts() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const toggleFeatured = useMutation({
+    mutationFn: async ({ id, isFeatured }: { id: string; isFeatured: boolean }) => {
+      const { error } = await supabase
+        .from("products")
+        .update({ is_featured: isFeatured })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      qc.invalidateQueries({ queryKey: ["storefront-products"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const del = useMutation({
     mutationFn: async (id: string) => {
       await supabase.from("product_images").delete().eq("product_id", id);
@@ -200,13 +262,14 @@ function AdminProducts() {
       stock_quantity: p.stock_quantity,
       status: (p.status as "active" | "draft") ?? "active",
       is_flash_sale: p.is_flash_sale,
+      is_featured: p.is_featured,
       category_id: p.category_id,
       image_url: p.image_url ?? "",
     });
     setOpen(true);
   }
 
-  const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "—";
+  const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "â€”";
 
   return (
     <div className="space-y-6">
@@ -241,16 +304,19 @@ function AdminProducts() {
               <TableHead>Product</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Price</TableHead>
+              <TableHead>Sales</TableHead>
               <TableHead>Stock</TableHead>
+              <TableHead>Variants</TableHead>
+              <TableHead>Carousel</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-32 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Loadingâ€¦</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No products.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No products.</TableCell></TableRow>
             ) : (
               filtered.map((p) => (
                 <TableRow key={p.id}>
@@ -267,10 +333,68 @@ function AdminProducts() {
                   </TableCell>
                   <TableCell className="text-sm">{catName(p.category_id)}</TableCell>
                   <TableCell>{formatNPR(p.price_npr)}</TableCell>
-                  <TableCell>{p.stock_quantity}</TableCell>
+                  <TableCell>
+                    <div className="font-medium tabular-nums">{p.sales_quantity}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatNPR(p.sales_revenue_npr)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{p.stock_quantity}</div>
+                    {p.product_variants.some((v) => v.is_active) && (
+                      <div className="text-xs text-muted-foreground">
+                        {p.product_variants
+                          .filter((v) => v.is_active)
+                          .reduce((sum, v) => sum + v.stock_quantity, 0)}{" "}
+                        across variants
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {p.product_variants.length === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setVariantFor({ id: p.id, name: p.name })}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Add variants
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setVariantFor({ id: p.id, name: p.name })}
+                        className="max-w-64 text-left"
+                      >
+                        <div className="flex flex-wrap gap-1">
+                          {p.product_variants.slice(0, 3).map((v) => (
+                            <Badge key={v.id} variant={v.is_active ? "outline" : "secondary"}>
+                              <span className="max-w-28 truncate capitalize">
+                                {stringifyOptions(v.options) || v.sku || "Variant"}
+                              </span>
+                              <span className="ml-1 tabular-nums">({v.stock_quantity})</span>
+                            </Badge>
+                          ))}
+                          {p.product_variants.length > 3 && (
+                            <Badge variant="secondary">+{p.product_variants.length - 3}</Badge>
+                          )}
+                        </div>
+                      </button>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={p.is_featured}
+                      onCheckedChange={(checked) =>
+                        toggleFeatured.mutate({ id: p.id, isFeatured: checked })
+                      }
+                      disabled={toggleFeatured.isPending}
+                      aria-label={`Show ${p.name} on homepage carousel`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1 flex-wrap">
                       <Badge variant={p.status === "active" ? "default" : "secondary"}>{p.status}</Badge>
+                      {p.is_featured && <Badge variant="outline">Carousel</Badge>}
                       {p.is_flash_sale && <Badge className="bg-gradient-gold text-gold-foreground border-0">Flash</Badge>}
                     </div>
                   </TableCell>
@@ -394,7 +518,7 @@ function AdminProducts() {
                 placeholder="https://images.unsplash.com/..."
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select
@@ -417,6 +541,15 @@ function AdminProducts() {
                   />
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label>Homepage carousel</Label>
+                <div className="h-10 flex items-center">
+                  <Switch
+                    checked={form.is_featured}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, is_featured: v }))}
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -426,7 +559,7 @@ function AdminProducts() {
               disabled={save.isPending || !form.name || form.price_npr <= 0}
               className="bg-gradient-primary shadow-elegant"
             >
-              {save.isPending ? "Saving…" : "Save"}
+              {save.isPending ? "Savingâ€¦" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

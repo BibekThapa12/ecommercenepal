@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, Star } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -8,6 +8,14 @@ import { Button } from "@/components/ui/button";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ProductCard, type ProductCardData } from "@/components/product-card";
+import {
+  type CarouselApi,
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { formatNPR } from "@/lib/commerce";
 
 export const Route = createFileRoute("/")({
@@ -31,6 +39,7 @@ type ProductRow = ProductCardData & {
   flash_sale_ends_at: string | null;
   category_id: string | null;
   stock_quantity: number;
+  is_featured: boolean;
 };
 
 type Category = { id: string; name: string; slug: string; description: string | null };
@@ -42,6 +51,147 @@ const CATEGORY_IMAGES: Record<string, string> = {
   "home-living": "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&q=80",
   "beauty-wellness": "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=800&q=80",
 };
+
+function HeroProductCarousel({
+  products,
+  isLoading,
+}: {
+  products: ProductRow[];
+  isLoading: boolean;
+}) {
+  const [api, setApi] = useState<CarouselApi>();
+  const [selected, setSelected] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+
+    const updateSelected = () => setSelected(api.selectedScrollSnap());
+    updateSelected();
+    api.on("select", updateSelected);
+    api.on("reInit", updateSelected);
+
+    return () => {
+      api.off("select", updateSelected);
+      api.off("reInit", updateSelected);
+    };
+  }, [api]);
+
+  useEffect(() => {
+    if (!api || products.length < 2) return;
+
+    const timer = window.setInterval(() => {
+      api.scrollNext();
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [api, products.length]);
+
+  if (isLoading) {
+    return (
+      <div className="relative min-h-[320px] aspect-[5/4] sm:aspect-[4/3] lg:min-h-[520px] rounded-3xl overflow-hidden shadow-elegant bg-gradient-hero">
+        <div className="absolute inset-0 bg-muted animate-pulse" />
+      </div>
+    );
+  }
+
+  if (!products.length) {
+    return (
+      <div className="relative min-h-[320px] aspect-[5/4] sm:aspect-[4/3] lg:min-h-[520px] rounded-3xl overflow-hidden shadow-elegant bg-gradient-hero">
+        <div className="absolute inset-0 flex items-center justify-center p-8 text-center text-muted-foreground">
+          Featured products will appear here.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Carousel
+      setApi={setApi}
+      opts={{ loop: true, align: "start" }}
+      className="group relative min-h-[320px] aspect-[5/4] sm:aspect-[4/3] lg:min-h-[520px] rounded-3xl overflow-hidden shadow-elegant bg-gradient-hero"
+    >
+      <CarouselContent className="h-full -ml-0 [&>div]:h-full">
+        {products.map((product) => {
+          const image =
+            product.product_images.find((i) => i.is_primary) ?? product.product_images[0];
+
+          return (
+            <CarouselItem key={product.id} className="h-full pl-0">
+              <div className="relative h-full w-full">
+                {image ? (
+                  <img
+                    src={image.url}
+                    alt={image.alt_text ?? product.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-muted" />
+                )}
+
+                <div className="absolute inset-0 bg-gradient-to-t from-background/55 via-background/5 to-background/10 sm:from-background/25" />
+
+                <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex items-center gap-1.5 rounded-full bg-background/90 backdrop-blur px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                  {product.stock_quantity > 0 ? "In Stock" : "Out of Stock"}
+                </div>
+
+                <div className="absolute bottom-4 left-3 right-3 sm:left-4 sm:right-auto sm:max-w-xs glass rounded-2xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                      Featured Product
+                    </div>
+                    <div className="font-display text-base sm:text-lg leading-tight line-clamp-2 sm:truncate">
+                      {product.name}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1">
+                      <div className="hidden sm:flex items-center gap-0.5">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star key={i} className="h-2.5 w-2.5 fill-gold text-gold" />
+                        ))}
+                      </div>
+                      <span className="font-display font-bold text-sm">
+                        {formatNPR(product.price_npr)}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    asChild
+                    size="sm"
+                    className="rounded-full bg-foreground text-background hover:bg-foreground/90 shrink-0 h-9 px-4"
+                  >
+                    <Link to="/products/$slug" params={{ slug: product.slug }}>
+                      View
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </CarouselItem>
+          );
+        })}
+      </CarouselContent>
+
+      {products.length > 1 && (
+        <>
+          <CarouselPrevious className="left-3 sm:left-4 top-1/2 h-8 w-8 sm:h-9 sm:w-9 border-background/70 bg-background/85 backdrop-blur opacity-100 sm:opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0" />
+          <CarouselNext className="right-3 sm:right-4 top-1/2 h-8 w-8 sm:h-9 sm:w-9 border-background/70 bg-background/85 backdrop-blur opacity-100 sm:opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0" />
+          <div className="absolute bottom-2.5 right-1/2 translate-x-1/2 sm:bottom-4 sm:right-4 sm:translate-x-0 flex items-center gap-1.5 rounded-full bg-background/60 px-2 py-1 backdrop-blur">
+            {products.map((product, index) => (
+              <button
+                key={product.id}
+                type="button"
+                aria-label={`Show ${product.name}`}
+                onClick={() => api?.scrollTo(index)}
+                className={`h-1.5 sm:h-2 rounded-full transition-all ${
+                  selected === index ? "w-6 bg-foreground" : "w-2 bg-foreground/30"
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </Carousel>
+  );
+}
 
 function Index() {
   const { data: categories = [] } = useQuery({
@@ -63,7 +213,7 @@ function Index() {
       const { data, error } = await supabase
         .from("products")
         .select(
-          "id, slug, name, short_description, price_npr, compare_at_price_npr, stock_quantity, is_flash_sale, flash_sale_ends_at, category_id, product_images(url, alt_text, is_primary)",
+          "id, slug, name, short_description, price_npr, compare_at_price_npr, stock_quantity, is_featured, is_flash_sale, flash_sale_ends_at, category_id, product_images(url, alt_text, is_primary), product_variants(id, is_active)",
         )
         .eq("status", "active")
         .order("created_at", { ascending: false });
@@ -72,9 +222,14 @@ function Index() {
     },
   });
 
-  const featured = useMemo(() => products.slice(0, 6), [products]);
-  const heroProduct = products[0];
-  const heroImg = heroProduct?.product_images.find((i) => i.is_primary) ?? heroProduct?.product_images[0];
+  const heroProducts = useMemo(() => {
+    const selected = products.filter((p) => p.is_featured);
+    return (selected.length ? selected : products).slice(0, 5);
+  }, [products]);
+  const featured = useMemo(() => {
+    const selected = products.filter((p) => p.is_featured);
+    return (selected.length ? selected : products).slice(0, 6);
+  }, [products]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,44 +278,7 @@ function Index() {
 
             {/* Hero visual */}
             <div className="relative">
-              <div className="relative aspect-[4/3] rounded-3xl overflow-hidden shadow-elegant bg-gradient-hero">
-                {heroImg ? (
-                  <img
-                    src={heroImg.url}
-                    alt={heroImg.alt_text ?? heroProduct?.name ?? "Featured"}
-                    className="h-full w-full object-cover"
-                  />
-                ) : null}
-
-                {heroProduct && (
-                  <div className="absolute bottom-4 left-4 right-4 sm:right-auto sm:max-w-xs glass rounded-2xl p-4 flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
-                        Just Restocked
-                      </div>
-                      <div className="font-display text-lg leading-tight truncate">{heroProduct.name}</div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <div className="flex items-center gap-0.5">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star key={i} className="h-2.5 w-2.5 fill-gold text-gold" />
-                          ))}
-                        </div>
-                        <span className="font-display font-bold text-sm">
-                          {formatNPR(heroProduct.price_npr)}
-                        </span>
-                      </div>
-                    </div>
-                    <Button asChild size="sm" className="rounded-full bg-foreground text-background hover:bg-foreground/90 shrink-0">
-                      <Link to="/products">View</Link>
-                    </Button>
-                  </div>
-                )}
-
-                <div className="absolute top-4 right-4 flex items-center gap-1.5 rounded-full bg-background/90 backdrop-blur px-3 py-1.5 text-xs">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                  In Stock
-                </div>
-              </div>
+              <HeroProductCarousel products={heroProducts} isLoading={isLoading} />
 
               <div className="hidden sm:grid grid-cols-3 gap-3 mt-4">
                 {[

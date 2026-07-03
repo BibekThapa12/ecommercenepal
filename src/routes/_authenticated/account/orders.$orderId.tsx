@@ -19,6 +19,8 @@ type OrderItem = {
   unit_price_npr: number;
   line_total_npr: number;
   image_url: string | null;
+  variant_label: string | null;
+  selected_options: Record<string, string>;
 };
 
 type Order = {
@@ -48,7 +50,7 @@ function OrderDetail() {
         .from("orders")
         .select(
           `id, order_number, status, payment_method, payment_status, subtotal_npr, shipping_npr, tax_npr, discount_npr, total_npr, created_at, shipping_address, customer_note,
-           order_items(id, product_name, quantity, unit_price_npr, line_total_npr, image_url),
+           order_items(id, product_name, quantity, unit_price_npr, line_total_npr, image_url, variant_label, selected_options),
            order_status_history(status, created_at, note)`,
         )
         .eq("id", orderId)
@@ -142,6 +144,11 @@ function OrderDetail() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{item.product_name}</div>
+                    {variantLabel(item) && (
+                      <div className="text-xs text-muted-foreground capitalize">
+                        {variantLabel(item)}
+                      </div>
+                    )}
                     <div className="text-xs text-muted-foreground">
                       {formatNPR(item.unit_price_npr)} × {item.quantity}
                     </div>
@@ -230,5 +237,14 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
       <span>{label}</span>
       <span className={bold ? "text-foreground" : ""}>{value}</span>
     </div>
+  );
+}
+
+function variantLabel(item: Pick<OrderItem, "variant_label" | "selected_options">) {
+  return (
+    item.variant_label ||
+    Object.entries(item.selected_options ?? {})
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(", ")
   );
 }

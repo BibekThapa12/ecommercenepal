@@ -159,6 +159,7 @@ export function VariantManagerDialog({
     onSuccess: () => {
       toast.success("Variant saved");
       qc.invalidateQueries({ queryKey: ["admin-variants", productId] });
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
       qc.invalidateQueries({ queryKey: ["storefront-products"] });
       setForm(empty);
       setEditing(false);
@@ -174,6 +175,8 @@ export function VariantManagerDialog({
     onSuccess: () => {
       toast.success("Variant deleted");
       qc.invalidateQueries({ queryKey: ["admin-variants", productId] });
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      qc.invalidateQueries({ queryKey: ["storefront-products"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

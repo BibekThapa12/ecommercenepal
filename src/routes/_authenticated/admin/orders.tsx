@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -54,7 +54,12 @@ type OrderRow = {
   guest_phone: string | null;
   shipping_address: ShippingAddress | null;
   customer_note: string | null;
-  order_items: { product_name: string; quantity: number }[];
+  order_items: {
+    product_name: string;
+    quantity: number;
+    variant_label: string | null;
+    selected_options: Record<string, string>;
+  }[];
 };
 
 const STATUS_TONE: Record<OrderStatus, string> = {
@@ -107,7 +112,7 @@ function AdminOrders() {
       const { data, error } = await supabase
         .from("orders")
         .select(
-          "id, order_number, status, total_npr, created_at, user_id, guest_email, guest_phone, shipping_address, customer_note, order_items(product_name, quantity)",
+          "id, order_number, status, total_npr, created_at, user_id, guest_email, guest_phone, shipping_address, customer_note, order_items(product_name, quantity, variant_label, selected_options)",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -123,6 +128,8 @@ function AdminOrders() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-orders"] });
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      qc.invalidateQueries({ queryKey: ["storefront-products"] });
       setPendingChange(null);
       setConfirmOpen(false);
       toast.success("Order status updated");
@@ -160,7 +167,7 @@ function AdminOrders() {
         </div>
         <div className="rounded-2xl border bg-card px-4 py-3 shadow-card">
           <div className="text-xs text-muted-foreground">Total orders</div>
-          <div className="text-2xl font-semibold">{isLoading ? "—" : orders.length}</div>
+          <div className="text-2xl font-semibold">{isLoading ? "â€”" : orders.length}</div>
         </div>
       </div>
 
@@ -184,7 +191,7 @@ function AdminOrders() {
                   colSpan={canDeleteOrders ? 7 : 6}
                   className="text-center py-8 text-muted-foreground"
                 >
-                  Loading orders…
+                  Loading ordersâ€¦
                 </TableCell>
               </TableRow>
             ) : orders.length === 0 ? (
@@ -201,11 +208,18 @@ function AdminOrders() {
                 const itemCount =
                   order.order_items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
                 const itemDescription = order.order_items
-                  .map((item) => `${item.quantity}× ${item.product_name}`)
+                  .map((item) => {
+                    const variant =
+                      item.variant_label ||
+                      Object.entries(item.selected_options ?? {})
+                        .map(([k, v]) => `${k}: ${v}`)
+                        .join(", ");
+                    return `${item.quantity}× ${item.product_name}${variant ? ` (${variant})` : ""}`;
+                  })
                   .join(", ");
                 const customerName =
                   order.shipping_address?.recipient_name ?? order.guest_email ?? "Guest";
-                const customerPhone = order.shipping_address?.phone ?? order.guest_phone ?? "—";
+                const customerPhone = order.shipping_address?.phone ?? order.guest_phone ?? "â€”";
                 const addressParts = [
                   order.shipping_address?.street_address,
                   order.shipping_address?.ward ? `Ward ${order.shipping_address.ward}` : null,
@@ -215,8 +229,8 @@ function AdminOrders() {
                 ]
                   .filter(Boolean)
                   .join(", ");
-                const customerAddress = addressParts || "—";
-                const note = order.customer_note ?? "—";
+                const customerAddress = addressParts || "â€”";
+                const note = order.customer_note ?? "â€”";
 
                 return (
                   <TableRow key={order.id}>
@@ -373,3 +387,5 @@ function AdminOrders() {
     </div>
   );
 }
+
+

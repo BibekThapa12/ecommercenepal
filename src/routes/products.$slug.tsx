@@ -2,6 +2,7 @@ import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-ro
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
+  AlertCircle,
   Heart,
   Minus,
   Plus,
@@ -62,6 +63,9 @@ type ProductDetail = {
 const PRODUCT_SELECT =
   "id, slug, name, description, short_description, price_npr, compare_at_price_npr, stock_quantity, is_flash_sale, tags, sku, category_id, weight_grams, brand:brands(name), category:categories(name, slug), product_images(url, alt_text, is_primary, variant_id), product_variants(id, sku, options, price_npr, compare_at_price_npr, stock_quantity, is_active, display_order)";
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const Route = createFileRoute("/products/$slug")({
   head: ({ loaderData }) => {
     const p = loaderData as ProductDetail | undefined;
@@ -80,19 +84,43 @@ export const Route = createFileRoute("/products/$slug")({
     };
   },
   loader: async ({ params }): Promise<ProductDetail> => {
-    const { data, error } = await supabase
+    const bySlug = await supabase
       .from("products")
       .select(PRODUCT_SELECT)
       .eq("slug", params.slug)
       .eq("status", "active")
       .maybeSingle();
-    if (error) throw error;
-    if (!data) throw notFound();
-    return data as unknown as ProductDetail;
+    if (bySlug.error) throw bySlug.error;
+    if (bySlug.data) return bySlug.data as unknown as ProductDetail;
+
+    if (UUID_RE.test(params.slug)) {
+      const byId = await supabase
+        .from("products")
+        .select(PRODUCT_SELECT)
+        .eq("id", params.slug)
+        .eq("status", "active")
+        .maybeSingle();
+      if (byId.error) throw byId.error;
+      if (byId.data) return byId.data as unknown as ProductDetail;
+    }
+
+    throw notFound();
   },
+  pendingComponent: ProductDetailSkeleton,
   errorComponent: ({ error }) => (
-    <div className="min-h-screen grid place-items-center text-muted-foreground">
-      {error.message}
+    <div className="min-h-screen bg-background">
+      <SiteHeader />
+      <main className="container mx-auto px-4 py-24">
+        <div className="mx-auto max-w-lg rounded-2xl border bg-card p-8 text-center shadow-card">
+          <AlertCircle className="mx-auto h-10 w-10 text-destructive" />
+          <h1 className="mt-4 font-display text-3xl font-semibold">Product could not load</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+          <Button asChild className="mt-6 rounded-full bg-foreground text-background hover:bg-foreground/90">
+            <Link to="/products">Back to products</Link>
+          </Button>
+        </div>
+      </main>
+      <SiteFooter />
     </div>
   ),
   notFoundComponent: () => (
@@ -109,6 +137,31 @@ export const Route = createFileRoute("/products/$slug")({
   ),
   component: ProductDetailsPage,
 });
+
+function ProductDetailSkeleton() {
+  return (
+    <div className="min-h-screen bg-background">
+      <SiteHeader />
+      <main className="container mx-auto px-4 sm:px-6 py-8">
+        <div className="h-4 w-64 rounded bg-muted animate-pulse" />
+        <div className="mt-8 grid lg:grid-cols-2 gap-10 lg:gap-16">
+          <div className="aspect-square rounded-3xl bg-muted animate-pulse" />
+          <div className="space-y-5">
+            <div className="h-3 w-40 rounded bg-muted animate-pulse" />
+            <div className="h-12 w-4/5 rounded bg-muted animate-pulse" />
+            <div className="h-5 w-72 rounded bg-muted animate-pulse" />
+            <div className="h-10 w-52 rounded bg-muted animate-pulse" />
+            <div className="h-20 w-full rounded bg-muted animate-pulse" />
+            <div className="flex gap-3">
+              <div className="h-12 w-36 rounded-full bg-muted animate-pulse" />
+              <div className="h-12 w-36 rounded-full bg-muted animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 const COLOR_KEYS = new Set(["color", "colour"]);
 
@@ -229,7 +282,7 @@ function ProductDetailsPage() {
       const { data, error } = await supabase
         .from("products")
         .select(
-          "id, slug, name, short_description, price_npr, compare_at_price_npr, is_flash_sale, stock_quantity, product_images(url, alt_text, is_primary), brand:brands(name)",
+          "id, slug, name, short_description, price_npr, compare_at_price_npr, is_flash_sale, stock_quantity, product_images(url, alt_text, is_primary), product_variants(id, is_active), brand:brands(name)",
         )
         .eq("status", "active")
         .eq("category_id", product.category_id!)
