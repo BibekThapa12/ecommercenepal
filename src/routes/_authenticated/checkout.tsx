@@ -49,9 +49,20 @@ type Address = {
 type CheckoutCartRow = {
   id: string;
   product_id: string;
+  variant_id: string | null;
+  selected_options: Record<string, string>;
   quantity: number;
   product: ProductLite | null;
+  variant: {
+    id: string;
+    sku: string | null;
+    price_npr: number | null;
+    stock_quantity: number;
+    options: Record<string, string>;
+    product_images: { url: string; alt_text: string | null; is_primary: boolean }[];
+  } | null;
 };
+
 
 function CheckoutPage() {
   const { user } = useAuth();
@@ -90,7 +101,7 @@ function CheckoutPage() {
       const { data: freshCart, error: cartError } = await supabase
         .from("cart_items")
         .select(
-          "id, product_id, quantity, product:products(id, name, slug, price_npr, compare_at_price_npr, stock_quantity, product_images(url, alt_text, is_primary))",
+          "id, product_id, variant_id, selected_options, quantity, product:products(id, name, slug, price_npr, compare_at_price_npr, stock_quantity, product_images(url, alt_text, is_primary)), variant:product_variants(id, sku, price_npr, stock_quantity, options, product_images(url, alt_text, is_primary))",
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
@@ -104,15 +115,23 @@ function CheckoutPage() {
         throw new Error("Some cart items are no longer available. Remove them and try again.");
       }
 
+      const priceFor = (i: CheckoutCartRow) =>
+        Number(i.variant?.price_npr ?? i.product!.price_npr);
+      const stockFor = (i: CheckoutCartRow) =>
+        i.variant ? i.variant.stock_quantity : i.product!.stock_quantity;
+      const skuFor = (i: CheckoutCartRow) => i.variant?.sku ?? null;
+      const imageFor = (i: CheckoutCartRow) =>
+        i.variant?.product_images?.[0]?.url ?? i.product!.product_images[0]?.url ?? null;
+
       const invalidStockItem = purchasableItems.find(
-        (item) => item.product!.stock_quantity <= 0 || item.quantity > item.product!.stock_quantity,
+        (item) => stockFor(item) <= 0 || item.quantity > stockFor(item),
       );
       if (invalidStockItem) {
         throw new Error(`${invalidStockItem.product!.name} does not have enough stock.`);
       }
 
       const orderSubtotal = purchasableItems.reduce(
-        (sum, item) => sum + Number(item.product!.price_npr) * item.quantity,
+        (sum, item) => sum + priceFor(item) * item.quantity,
         0,
       );
       if (orderSubtotal <= 0) throw new Error("Order total must be greater than zero.");
@@ -151,17 +170,28 @@ function CheckoutPage() {
         .single();
       if (oerr) throw oerr;
 
-      const items = purchasableItems.map((i) => ({
-        order_id: order.id,
-        product_id: i.product_id,
-        product_name: i.product!.name,
-        quantity: i.quantity,
-        unit_price_npr: Number(i.product!.price_npr),
-        line_total_npr: Number(i.product!.price_npr) * i.quantity,
-        image_url: i.product!.product_images[0]?.url ?? null,
-      }));
+      const items = purchasableItems.map((i) => {
+        const opts = i.selected_options ?? i.variant?.options ?? {};
+        const label = Object.entries(opts)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(", ");
+        return {
+          order_id: order.id,
+          product_id: i.product_id,
+          variant_id: i.variant_id,
+          product_name: i.product!.name,
+          product_sku: skuFor(i),
+          selected_options: opts,
+          variant_label: label || null,
+          quantity: i.quantity,
+          unit_price_npr: priceFor(i),
+          line_total_npr: priceFor(i) * i.quantity,
+          image_url: imageFor(i),
+        };
+      });
       const { error: ierr } = await supabase.from("order_items").insert(items);
       if (ierr) throw ierr;
+
 
       await supabase.from("cart_items").delete().eq("user_id", user.id);
       return order;
@@ -300,17 +330,22 @@ function CheckoutPage() {
           <aside className="rounded-2xl border bg-card p-6 shadow-card h-fit lg:sticky lg:top-24">
             <h2 className="font-display text-xl font-semibold">Summary</h2>
             <div className="mt-4 space-y-3">
-              {cart.items.map((row) => (
-                <div key={row.id} className="flex justify-between text-sm">
-                  <span className="truncate pr-2">
-                    {row.product?.name}{" "}
-                    <span className="text-muted-foreground">× {row.quantity}</span>
-                  </span>
-                  <span className="tabular-nums">
-                    {formatNPR((row.product?.price_npr ?? 0) * row.quantity)}
-                  </span>
-                </div>
-              ))}
+              {cart.items.map((row) => {
+                const price = Number(row.variant?.price_npr ?? row.product?.price_npr ?? 0);
+                const opts = row.selected_options ?? {};
+                const label = Object.entries(opts).map(([k, v]) => `${v}`).join(" / ");
+                return (
+                  <div key={row.id} className="flex justify-between text-sm">
+                    <span className="truncate pr-2">
+                      {row.product?.name}
+                      {label && <span className="text-muted-foreground"> · {label}</span>}{" "}
+                      <span className="text-muted-foreground">× {row.quantity}</span>
+                    </span>
+                    <span className="tabular-nums">{formatNPR(price * row.quantity)}</span>
+                  </div>
+                );
+              })}
+
             </div>
             <Separator className="my-4" />
             <div className="space-y-2 text-sm">

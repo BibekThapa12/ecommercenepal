@@ -1,7 +1,20 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Heart, Minus, Plus, ShoppingBag, Star, Truck, ShieldCheck, RotateCcw } from "lucide-react";
+import {
+  Heart,
+  Minus,
+  Plus,
+  ShoppingBag,
+  Star,
+  Truck,
+  ShieldCheck,
+  RotateCcw,
+  Share2,
+  GitCompare,
+  Zap,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/site-header";
@@ -13,6 +26,18 @@ import { useAuth } from "@/lib/auth";
 import { formatNPR } from "@/lib/commerce";
 import { useCart, useWishlist } from "@/lib/use-commerce";
 import { cn } from "@/lib/utils";
+
+type Img = { url: string; alt_text: string | null; is_primary: boolean; variant_id?: string | null };
+type Variant = {
+  id: string;
+  sku: string | null;
+  options: Record<string, string>;
+  price_npr: number | null;
+  compare_at_price_npr: number | null;
+  stock_quantity: number;
+  is_active: boolean;
+  display_order: number;
+};
 
 type ProductDetail = {
   id: string;
@@ -27,13 +52,15 @@ type ProductDetail = {
   tags: string[];
   sku: string | null;
   category_id: string | null;
+  weight_grams: number | null;
   brand: { name: string } | null;
   category: { name: string; slug: string } | null;
-  product_images: { url: string; alt_text: string | null; is_primary: boolean }[];
+  product_images: Img[];
+  product_variants: Variant[];
 };
 
 const PRODUCT_SELECT =
-  "id, slug, name, description, short_description, price_npr, compare_at_price_npr, stock_quantity, is_flash_sale, tags, sku, category_id, brand:brands(name), category:categories(name, slug), product_images(url, alt_text, is_primary)";
+  "id, slug, name, description, short_description, price_npr, compare_at_price_npr, stock_quantity, is_flash_sale, tags, sku, category_id, weight_grams, brand:brands(name), category:categories(name, slug), product_images(url, alt_text, is_primary, variant_id), product_variants(id, sku, options, price_npr, compare_at_price_npr, stock_quantity, is_active, display_order)";
 
 export const Route = createFileRoute("/products/$slug")({
   head: ({ loaderData }) => {
@@ -83,6 +110,8 @@ export const Route = createFileRoute("/products/$slug")({
   component: ProductDetailsPage,
 });
 
+const COLOR_KEYS = new Set(["color", "colour"]);
+
 function ProductDetailsPage() {
   const product = Route.useLoaderData() as ProductDetail;
   const { user } = useAuth();
@@ -92,15 +121,106 @@ function ProductDetailsPage() {
   const [qty, setQty] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
 
-  const images = product.product_images.length
-    ? product.product_images
-    : [{ url: "", alt_text: product.name, is_primary: true }];
-  const discount = product.compare_at_price_npr && product.compare_at_price_npr > product.price_npr
-    ? Math.round(((product.compare_at_price_npr - product.price_npr) / product.compare_at_price_npr) * 100)
-    : null;
-  const outOfStock = product.stock_quantity === 0;
-  const lowStock = !outOfStock && product.stock_quantity <= 5;
+  const variants = (product.product_variants ?? []).filter((v) => v.is_active);
+  const hasVariants = variants.length > 0;
+
+  // Collect option keys and values from all variants (preserving order of appearance).
+  const optionKeys = useMemo(() => {
+    const seen: string[] = [];
+    for (const v of variants) {
+      for (const k of Object.keys(v.options ?? {})) {
+        if (!seen.includes(k)) seen.push(k);
+      }
+    }
+    return seen;
+  }, [variants]);
+
+  const optionValues = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const k of optionKeys) map[k] = [];
+    for (const v of variants) {
+      for (const k of optionKeys) {
+        const val = v.options?.[k];
+        if (val && !map[k].includes(val)) map[k].push(val);
+      }
+    }
+    return map;
+  }, [variants, optionKeys]);
+
+  // Selected options — default to first variant's options.
+  const [selected, setSelected] = useState<Record<string, string>>(() => {
+    if (!hasVariants) return {};
+    const first = variants[0];
+    return { ...(first.options ?? {}) };
+  });
+
+  // Which variant fully matches current selection.
+  const matchedVariant = useMemo(() => {
+    if (!hasVariants) return null;
+    return (
+      variants.find((v) =>
+        optionKeys.every((k) => v.options?.[k] === selected[k]),
+      ) ?? null
+    );
+  }, [variants, optionKeys, selected, hasVariants]);
+
+  // Is a specific (key,value) available given other current selections?
+  function isValueAvailable(key: string, value: string) {
+    return variants.some(
+      (v) =>
+        v.options?.[key] === value &&
+        v.stock_quantity > 0 &&
+        optionKeys.every(
+          (k) => k === key || !selected[k] || v.options?.[k] === selected[k],
+        ),
+    );
+  }
+
+  // Dynamic gallery: variant match > partial match on Color > product images.
+  const gallery: Img[] = useMemo(() => {
+    const all = product.product_images ?? [];
+    if (matchedVariant) {
+      const exact = all.filter((i) => i.variant_id === matchedVariant.id);
+      if (exact.length) return exact;
+    }
+    // Partial match: variants that share the selected color.
+    const colorKey = optionKeys.find((k) => COLOR_KEYS.has(k.toLowerCase()));
+    if (colorKey && selected[colorKey]) {
+      const colorVariantIds = variants
+        .filter((v) => v.options?.[colorKey] === selected[colorKey])
+        .map((v) => v.id);
+      const colored = all.filter(
+        (i) => i.variant_id && colorVariantIds.includes(i.variant_id),
+      );
+      if (colored.length) return colored;
+    }
+    const generic = all.filter((i) => !i.variant_id);
+    return generic.length ? generic : all;
+  }, [product.product_images, matchedVariant, selected, optionKeys, variants]);
+
+  // Reset active image index when gallery changes.
+  const currentImg = gallery[activeImg] ?? gallery[0];
+
+  const effectivePrice = matchedVariant?.price_npr ?? product.price_npr;
+  const effectiveCompare =
+    matchedVariant?.compare_at_price_npr ?? product.compare_at_price_npr;
+  const effectiveStock = hasVariants
+    ? matchedVariant?.stock_quantity ?? 0
+    : product.stock_quantity;
+  const effectiveSku = matchedVariant?.sku ?? product.sku;
+
+  const discount =
+    effectiveCompare && effectiveCompare > effectivePrice
+      ? Math.round(((effectiveCompare - effectivePrice) / effectiveCompare) * 100)
+      : null;
+  const outOfStock = effectiveStock === 0;
+  const lowStock = !outOfStock && effectiveStock <= 5;
   const saved = wishlist.ids.has(product.id);
+
+  const missingOption = hasVariants
+    ? optionKeys.find((k) => !selected[k]) ?? null
+    : null;
+  const needsSelection = hasVariants && (!matchedVariant || missingOption);
 
   const { data: related = [] } = useQuery({
     queryKey: ["related-products", product.category_id, product.id],
@@ -108,7 +228,9 @@ function ProductDetailsPage() {
     queryFn: async (): Promise<ProductCardData[]> => {
       const { data, error } = await supabase
         .from("products")
-        .select("id, slug, name, short_description, price_npr, compare_at_price_npr, is_flash_sale, stock_quantity, product_images(url, alt_text, is_primary), brand:brands(name)")
+        .select(
+          "id, slug, name, short_description, price_npr, compare_at_price_npr, is_flash_sale, stock_quantity, product_images(url, alt_text, is_primary), brand:brands(name)",
+        )
         .eq("status", "active")
         .eq("category_id", product.category_id!)
         .neq("id", product.id)
@@ -123,15 +245,55 @@ function ProductDetailsPage() {
     action();
   }
 
-  const variants = useMemo(() => {
-    // Derive faux "variants" from tags for now so the UI matches designs.
-    const colors = product.tags.filter((t) => ["black", "white", "silver", "gold", "blue", "red", "green"].includes(t.toLowerCase()));
-    const sizes = product.tags.filter((t) => ["xs", "s", "m", "l", "xl", "xxl"].includes(t.toLowerCase()));
-    return { colors, sizes };
-  }, [product.tags]);
+  function handleAdd(buyNow = false) {
+    if (needsSelection) {
+      toast.error(`Please select ${missingOption ?? "a variant"} first`);
+      return;
+    }
+    if (outOfStock) return;
+    requireAuth(() =>
+      cart.add.mutate(
+        {
+          productId: product.id,
+          variantId: matchedVariant?.id ?? null,
+          selectedOptions: selected,
+          quantity: qty,
+        },
+        {
+          onSuccess: () => {
+            if (buyNow) navigate({ to: "/checkout" });
+          },
+        },
+      ),
+    );
+  }
 
-  const [color, setColor] = useState(variants.colors[0] ?? null);
-  const [size, setSize] = useState(variants.sizes[0] ?? null);
+  async function handleShare() {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    try {
+      if (typeof navigator !== "undefined" && (navigator as any).share) {
+        await (navigator as any).share({ title: product.name, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied to clipboard");
+      }
+    } catch {
+      /* user cancelled */
+    }
+  }
+
+  function handleCompare() {
+    if (typeof window === "undefined") return;
+    const key = "compare-products";
+    const existing: string[] = JSON.parse(localStorage.getItem(key) ?? "[]");
+    if (existing.includes(product.slug)) {
+      toast.info("Already in compare list");
+      return;
+    }
+    const next = [...existing, product.slug].slice(-4);
+    localStorage.setItem(key, JSON.stringify(next));
+    toast.success(`Added to compare (${next.length})`);
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -146,9 +308,7 @@ function ProductDetailsPage() {
           {product.category && (
             <>
               <span className="mx-2">/</span>
-              <Link to="/products" search={{ category: product.category.slug }} className="hover:text-foreground">
-                {product.category.name}
-              </Link>
+              <span className="hover:text-foreground">{product.category.name}</span>
             </>
           )}
           <span className="mx-2">/</span>
@@ -159,10 +319,10 @@ function ProductDetailsPage() {
           {/* Gallery */}
           <div>
             <div className="relative aspect-square rounded-3xl overflow-hidden bg-muted border border-border/60">
-              {images[activeImg]?.url ? (
+              {currentImg?.url ? (
                 <img
-                  src={images[activeImg].url}
-                  alt={images[activeImg].alt_text ?? product.name}
+                  src={currentImg.url}
+                  alt={currentImg.alt_text ?? product.name}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -182,15 +342,17 @@ function ProductDetailsPage() {
               )}
             </div>
 
-            {images.length > 1 && (
+            {gallery.length > 1 && (
               <div className="grid grid-cols-5 gap-3 mt-4">
-                {images.map((img, i) => (
+                {gallery.map((img, i) => (
                   <button
-                    key={i}
+                    key={`${img.url}-${i}`}
                     onClick={() => setActiveImg(i)}
                     className={cn(
                       "aspect-square rounded-xl overflow-hidden border-2 transition-base",
-                      i === activeImg ? "border-foreground" : "border-transparent opacity-70 hover:opacity-100",
+                      i === activeImg
+                        ? "border-foreground"
+                        : "border-transparent opacity-70 hover:opacity-100",
                     )}
                   >
                     <img src={img.url} alt="" className="h-full w-full object-cover" />
@@ -218,78 +380,96 @@ function ProductDetailsPage() {
                 ))}
               </div>
               <span>4.9 (238 reviews)</span>
+              {effectiveSku && (
+                <>
+                  <span>·</span>
+                  <span className="font-mono text-xs">SKU: {effectiveSku}</span>
+                </>
+              )}
             </div>
 
             <div className="flex items-baseline gap-3 mt-6">
-              <span className="font-display text-4xl font-bold">{formatNPR(product.price_npr)}</span>
-              {product.compare_at_price_npr && (
+              <span className="font-display text-4xl font-bold">{formatNPR(effectivePrice)}</span>
+              {effectiveCompare && effectiveCompare > effectivePrice && (
                 <span className="text-lg text-muted-foreground line-through">
-                  {formatNPR(product.compare_at_price_npr)}
+                  {formatNPR(effectiveCompare)}
                 </span>
               )}
             </div>
 
             {product.short_description && (
-              <p className="text-muted-foreground mt-5 leading-relaxed">{product.short_description}</p>
+              <p className="text-muted-foreground mt-5 leading-relaxed">
+                {product.short_description}
+              </p>
             )}
+
+            {/* Variant selectors */}
+            {hasVariants &&
+              optionKeys.map((key) => (
+                <div key={key} className="mt-6">
+                  <div className="text-sm font-medium capitalize mb-2">
+                    {key}
+                    {selected[key] && (
+                      <span className="text-muted-foreground font-normal ml-2">
+                        {selected[key]}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {optionValues[key].map((val) => {
+                      const active = selected[key] === val;
+                      const available = isValueAvailable(key, val);
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          disabled={!available && !active}
+                          onClick={() => {
+                            setSelected((s) => ({ ...s, [key]: val }));
+                            setActiveImg(0);
+                          }}
+                          className={cn(
+                            "px-4 py-2 rounded-full border text-sm transition-base",
+                            active
+                              ? "bg-foreground text-background border-foreground"
+                              : "border-border hover:border-foreground",
+                            !available &&
+                              !active &&
+                              "opacity-40 line-through cursor-not-allowed",
+                          )}
+                        >
+                          {val}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
 
             {/* Stock */}
             <div className="mt-6 flex items-center gap-2 text-sm">
-              <span className={cn("h-2 w-2 rounded-full", outOfStock ? "bg-destructive" : lowStock ? "bg-gold" : "bg-emerald-500")} />
-              <span className="font-medium">
-                {outOfStock ? "Out of stock" : lowStock ? `Only ${product.stock_quantity} left` : "In stock"}
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  outOfStock
+                    ? "bg-destructive"
+                    : lowStock
+                      ? "bg-gold"
+                      : "bg-emerald-500",
+                )}
+              />
+              <span className="text-muted-foreground">
+                {outOfStock
+                  ? "Out of stock"
+                  : lowStock
+                    ? `Only ${effectiveStock} left in stock`
+                    : "In stock — ready to ship"}
               </span>
-              {product.sku && <span className="text-muted-foreground">· SKU {product.sku}</span>}
             </div>
 
-            {/* Variants */}
-            {variants.colors.length > 0 && (
-              <div className="mt-6">
-                <div className="text-[10px] uppercase tracking-[0.2em] font-semibold text-muted-foreground mb-2">
-                  Color: <span className="text-foreground">{color}</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {variants.colors.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setColor(c)}
-                      className={cn(
-                        "px-4 h-10 rounded-full border text-sm capitalize transition-base",
-                        color === c ? "bg-foreground text-background border-foreground" : "border-border hover:border-foreground",
-                      )}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {variants.sizes.length > 0 && (
-              <div className="mt-5">
-                <div className="text-[10px] uppercase tracking-[0.2em] font-semibold text-muted-foreground mb-2">
-                  Size: <span className="text-foreground">{size?.toUpperCase()}</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {variants.sizes.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setSize(s)}
-                      className={cn(
-                        "min-w-12 h-10 px-3 rounded-full border text-sm uppercase font-medium transition-base",
-                        size === s ? "bg-foreground text-background border-foreground" : "border-border hover:border-foreground",
-                      )}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Qty + CTAs */}
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center rounded-full border border-border h-12">
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <div className="flex items-center rounded-full border border-border h-12 overflow-hidden">
                 <button
                   className="h-full w-11 grid place-items-center hover:bg-accent rounded-l-full disabled:opacity-40"
                   onClick={() => setQty((q) => Math.max(1, q - 1))}
@@ -301,7 +481,7 @@ function ProductDetailsPage() {
                 <button
                   className="h-full w-11 grid place-items-center hover:bg-accent rounded-r-full disabled:opacity-40"
                   onClick={() => setQty((q) => Math.min(99, q + 1))}
-                  disabled={qty >= product.stock_quantity}
+                  disabled={qty >= effectiveStock}
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -309,7 +489,7 @@ function ProductDetailsPage() {
 
               <Button
                 size="lg"
-                onClick={() => requireAuth(() => cart.add.mutate({ productId: product.id, quantity: qty }))}
+                onClick={() => handleAdd(false)}
                 disabled={cart.add.isPending || outOfStock}
                 className="rounded-full bg-foreground text-background hover:bg-foreground/90 h-12 px-8 gap-2 font-medium flex-1 sm:flex-none"
               >
@@ -318,15 +498,54 @@ function ProductDetailsPage() {
               </Button>
 
               <Button
+                size="lg"
+                onClick={() => handleAdd(true)}
+                disabled={cart.add.isPending || outOfStock}
+                className="rounded-full bg-gold text-gold-foreground hover:opacity-90 h-12 px-8 gap-2 font-medium"
+              >
+                <Zap className="h-4 w-4" />
+                Buy now
+              </Button>
+
+              <Button
                 variant="outline"
                 size="lg"
                 onClick={() => requireAuth(() => wishlist.toggle.mutate(product.id))}
-                className={cn("rounded-full h-12 w-12 p-0", saved && "text-gold border-gold")}
+                className={cn(
+                  "rounded-full h-12 w-12 p-0",
+                  saved && "text-gold border-gold",
+                )}
                 aria-label="Save to wishlist"
               >
                 <Heart className={cn("h-4 w-4", saved && "fill-current")} />
               </Button>
+
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleShare}
+                className="rounded-full h-12 w-12 p-0"
+                aria-label="Share product"
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleCompare}
+                className="rounded-full h-12 w-12 p-0"
+                aria-label="Add to compare"
+              >
+                <GitCompare className="h-4 w-4" />
+              </Button>
             </div>
+
+            {needsSelection && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Select {missingOption ?? "a variant"} to continue.
+              </p>
+            )}
 
             {/* Trust badges */}
             <div className="mt-8 grid grid-cols-3 gap-3 pt-6 border-t border-border/60">
@@ -337,15 +556,36 @@ function ProductDetailsPage() {
           </div>
         </div>
 
-        {/* Description */}
-        {product.description && (
-          <section className="mt-16 max-w-3xl">
-            <h2 className="font-display text-3xl font-bold">About this product</h2>
-            <div className="mt-4 text-muted-foreground leading-relaxed whitespace-pre-line">
-              {product.description}
-            </div>
+        {/* Description & Specs */}
+        <div className="grid md:grid-cols-2 gap-10 mt-16">
+          {product.description && (
+            <section>
+              <h2 className="font-display text-3xl font-bold">About this product</h2>
+              <div className="mt-4 text-muted-foreground leading-relaxed whitespace-pre-line">
+                {product.description}
+              </div>
+            </section>
+          )}
+          <section>
+            <h2 className="font-display text-3xl font-bold">Specifications</h2>
+            <dl className="mt-4 divide-y divide-border/60 border rounded-2xl overflow-hidden bg-card">
+              <SpecRow label="Brand" value={product.brand?.name ?? "—"} />
+              <SpecRow label="Category" value={product.category?.name ?? "—"} />
+              <SpecRow label="SKU" value={effectiveSku ?? "—"} />
+              {product.weight_grams != null && (
+                <SpecRow label="Weight" value={`${product.weight_grams} g`} />
+              )}
+              {matchedVariant &&
+                Object.entries(matchedVariant.options).map(([k, v]) => (
+                  <SpecRow key={k} label={k} value={String(v)} />
+                ))}
+              <SpecRow
+                label="Availability"
+                value={outOfStock ? "Out of stock" : `${effectiveStock} in stock`}
+              />
+            </dl>
           </section>
-        )}
+        </div>
 
         {/* Related */}
         {related.length > 0 && (
@@ -364,6 +604,15 @@ function ProductDetailsPage() {
       </main>
 
       <SiteFooter />
+    </div>
+  );
+}
+
+function SpecRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between px-4 py-3 text-sm">
+      <dt className="text-muted-foreground capitalize">{label}</dt>
+      <dd className="font-medium text-right">{value}</dd>
     </div>
   );
 }

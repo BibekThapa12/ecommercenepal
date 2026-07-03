@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { VariantManagerDialog } from "@/components/admin/variant-manager";
 import { formatNPR } from "@/lib/commerce";
 
 export const Route = createFileRoute("/_authenticated/admin/products")({
@@ -90,6 +91,7 @@ function AdminProducts() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(empty);
   const [filterCat, setFilterCat] = useState<string>("all");
+  const [variantFor, setVariantFor] = useState<{ id: string; name: string } | null>(null);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["admin-categories-lite"],
@@ -273,6 +275,15 @@ function AdminProducts() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setVariantFor({ id: p.id, name: p.name })}
+                      aria-label="Variants"
+                      title="Manage variants"
+                    >
+                      <Layers className="h-4 w-4" />
+                    </Button>
                     <Button size="icon" variant="ghost" onClick={() => openEdit(p)} aria-label="Edit">
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -285,6 +296,7 @@ function AdminProducts() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
+
                 </TableRow>
               ))
             )}
@@ -419,6 +431,13 @@ function AdminProducts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <VariantManagerDialog
+        productId={variantFor?.id ?? null}
+        productName={variantFor?.name ?? ""}
+        open={!!variantFor}
+        onOpenChange={(v) => !v && setVariantFor(null)}
+      />
     </div>
   );
 }
