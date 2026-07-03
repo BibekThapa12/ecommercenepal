@@ -33,6 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { VariantManagerDialog } from "@/components/admin/variant-manager";
 import { formatNPR } from "@/lib/commerce";
 
 export const Route = createFileRoute("/_authenticated/admin/products")({
