@@ -275,6 +275,15 @@ function AdminProducts() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setVariantFor({ id: p.id, name: p.name })}
+                      aria-label="Variants"
+                      title="Manage variants"
+                    >
+                      <Layers className="h-4 w-4" />
+                    </Button>
                     <Button size="icon" variant="ghost" onClick={() => openEdit(p)} aria-label="Edit">
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -287,6 +296,7 @@ function AdminProducts() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
+
                 </TableRow>
               ))
             )}
