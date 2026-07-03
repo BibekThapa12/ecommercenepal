@@ -330,17 +330,22 @@ function CheckoutPage() {
           <aside className="rounded-2xl border bg-card p-6 shadow-card h-fit lg:sticky lg:top-24">
             <h2 className="font-display text-xl font-semibold">Summary</h2>
             <div className="mt-4 space-y-3">
-              {cart.items.map((row) => (
-                <div key={row.id} className="flex justify-between text-sm">
-                  <span className="truncate pr-2">
-                    {row.product?.name}{" "}
-                    <span className="text-muted-foreground">× {row.quantity}</span>
-                  </span>
-                  <span className="tabular-nums">
-                    {formatNPR((row.product?.price_npr ?? 0) * row.quantity)}
-                  </span>
-                </div>
-              ))}
+              {cart.items.map((row) => {
+                const price = Number(row.variant?.price_npr ?? row.product?.price_npr ?? 0);
+                const opts = row.selected_options ?? {};
+                const label = Object.entries(opts).map(([k, v]) => `${v}`).join(" / ");
+                return (
+                  <div key={row.id} className="flex justify-between text-sm">
+                    <span className="truncate pr-2">
+                      {row.product?.name}
+                      {label && <span className="text-muted-foreground"> · {label}</span>}{" "}
+                      <span className="text-muted-foreground">× {row.quantity}</span>
+                    </span>
+                    <span className="tabular-nums">{formatNPR(price * row.quantity)}</span>
+                  </div>
+                );
+              })}
+
             </div>
             <Separator className="my-4" />
             <div className="space-y-2 text-sm">
