@@ -49,9 +49,20 @@ type Address = {
 type CheckoutCartRow = {
   id: string;
   product_id: string;
+  variant_id: string | null;
+  selected_options: Record<string, string>;
   quantity: number;
   product: ProductLite | null;
+  variant: {
+    id: string;
+    sku: string | null;
+    price_npr: number | null;
+    stock_quantity: number;
+    options: Record<string, string>;
+    product_images: { url: string; alt_text: string | null; is_primary: boolean }[];
+  } | null;
 };
+
 
 function CheckoutPage() {
   const { user } = useAuth();
