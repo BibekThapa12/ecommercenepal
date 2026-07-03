@@ -48,7 +48,12 @@ function CartPage() {
               {cart.items.map((row) => {
                 const p = row.product;
                 if (!p) return null;
-                const img = p.product_images.find((i) => i.is_primary) ?? p.product_images[0];
+                const variantImg = row.variant?.product_images?.find((i) => i.is_primary) ?? row.variant?.product_images?.[0];
+                const img = variantImg ?? p.product_images.find((i) => i.is_primary) ?? p.product_images[0];
+                const unitPrice = Number(row.variant?.price_npr ?? p.price_npr);
+                const stock = row.variant ? row.variant.stock_quantity : p.stock_quantity;
+                const opts = row.selected_options ?? row.variant?.options ?? {};
+                const optLabel = Object.entries(opts).map(([k, v]) => `${k}: ${v}`).join(" · ");
                 return (
                   <div
                     key={row.id}
@@ -75,8 +80,14 @@ function CartPage() {
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
+                      {optLabel && (
+                        <div className="text-xs text-muted-foreground mt-0.5 capitalize">{optLabel}</div>
+                      )}
+                      {row.variant?.sku && (
+                        <div className="text-[11px] text-muted-foreground font-mono">SKU: {row.variant.sku}</div>
+                      )}
                       <div className="text-sm text-muted-foreground mt-0.5">
-                        {formatNPR(p.price_npr)}
+                        {formatNPR(unitPrice)}
                       </div>
                       <div className="mt-auto flex items-center justify-between">
                         <div className="inline-flex items-center rounded-full border bg-background">
@@ -96,7 +107,7 @@ function CartPage() {
                           <button
                             aria-label="Increase"
                             className="grid h-8 w-8 place-items-center rounded-r-full hover:bg-muted transition-base disabled:opacity-40"
-                            disabled={cart.setQty.isPending || row.quantity >= p.stock_quantity}
+                            disabled={cart.setQty.isPending || row.quantity >= stock}
                             onClick={() =>
                               cart.setQty.mutate({ id: row.id, quantity: row.quantity + 1 })
                             }
@@ -104,11 +115,12 @@ function CartPage() {
                             <Plus className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                        <div className="font-semibold">{formatNPR(p.price_npr * row.quantity)}</div>
+                        <div className="font-semibold">{formatNPR(unitPrice * row.quantity)}</div>
                       </div>
                     </div>
                   </div>
                 );
+
               })}
             </div>
 
