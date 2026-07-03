@@ -152,7 +152,12 @@ export function useCart() {
   });
 
   const items = query.data ?? [];
-  const subtotal = items.reduce((s, i) => s + (i.product?.price_npr ?? 0) * i.quantity, 0);
+  const subtotal = items.reduce(
+    (s, i) =>
+      s + Number(i.variant?.price_npr ?? i.product?.price_npr ?? 0) * i.quantity,
+    0,
+  );
+
   const count = items.reduce((s, i) => s + i.quantity, 0);
 
   return { items, subtotal, count, isLoading: query.isLoading, add, setQty, remove, clear };
