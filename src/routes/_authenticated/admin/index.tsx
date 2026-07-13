@@ -37,7 +37,7 @@ function AdminDashboard() {
           supabase.from("orders").select("id", { count: "exact", head: true }).eq("payment_status", "failed"),
           supabase
             .from("orders")
-            .select("id, order_number, total_npr, created_at, status, user_id, profiles:profiles(full_name, email)")
+            .select("id, order_number, total_npr, created_at, status, user_id")
             .order("created_at", { ascending: false })
             .limit(5),
           supabase
@@ -48,20 +48,31 @@ function AdminDashboard() {
             .limit(4),
         ]);
 
+      const userIds = Array.from(
+        new Set((recentOrdersRes.data ?? []).map((o) => o.user_id).filter(Boolean) as string[]),
+      );
+      const profilesMap = new Map<string, { full_name: string | null; email: string | null }>();
+      if (userIds.length) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", userIds);
+        for (const p of profs ?? []) profilesMap.set(p.id, { full_name: p.full_name, email: p.email });
+      }
+
       return {
         ordersCount: ordersRes.count ?? 0,
         customersCount: customersRes.count ?? 0,
         failedCount: failedRes.count ?? 0,
         revenue: (deliveredRes.data ?? []).reduce((s, o) => s + Number(o.total_npr ?? 0), 0),
-        recent: (recentOrdersRes.data ?? []) as Array<{
-          id: string;
-          order_number: string | null;
-          total_npr: number;
-          created_at: string;
-          status: string;
-          user_id: string;
-          profiles: { full_name: string | null; email: string | null } | null;
-        }>,
+        recent: (recentOrdersRes.data ?? []).map((o) => ({
+          id: o.id,
+          order_number: o.order_number,
+          total_npr: Number(o.total_npr),
+          created_at: o.created_at,
+          status: o.status,
+          profile: (o.user_id && profilesMap.get(o.user_id)) || null,
+        })),
         lowStock: (lowStockRes.data ?? []) as Array<{
           id: string;
           name: string;
