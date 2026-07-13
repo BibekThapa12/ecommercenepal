@@ -179,8 +179,8 @@ function AdminDashboard() {
               </p>
             )}
             {(data?.recent ?? []).map((order) => {
-              const displayName = order.profiles?.full_name ?? order.profiles?.email ?? "Guest";
-              const email = order.profiles?.email ?? "—";
+              const displayName = order.profile?.full_name ?? order.profile?.email ?? "Guest";
+              const email = order.profile?.email ?? "—";
               const initials = displayName.slice(0, 2).toUpperCase();
               return (
                 <Link
