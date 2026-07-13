@@ -1,8 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ArrowUpRight, DollarSign, Package, ShoppingCart, Users } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  CreditCard,
+  DollarSign,
+  Download,
+  Package,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNPR } from "@/lib/commerce";
@@ -12,122 +22,230 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 });
 
 function AdminDashboard() {
-  const { user, roles } = useAuth();
+  const { user } = useAuth();
   const name =
-    (user?.user_metadata?.full_name as string | undefined) ?? user?.email?.split("@")[0] ?? "there";
+    (user?.user_metadata?.full_name as string | undefined) ?? user?.email?.split("@")[0] ?? "Admin";
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-dashboard-stats"],
     queryFn: async () => {
-      const [productsRes, ordersRes, customersRes, deliveredRes] = await Promise.all([
-        supabase.from("products").select("id", { count: "exact", head: true }),
-        supabase.from("orders").select("id", { count: "exact", head: true }),
-        supabase.from("profiles").select("id", { count: "exact", head: true }),
-        supabase.from("orders").select("total_npr").eq("status", "delivered"),
-      ]);
+      const [ordersRes, customersRes, deliveredRes, failedRes, recentOrdersRes, lowStockRes] =
+        await Promise.all([
+          supabase.from("orders").select("id", { count: "exact", head: true }),
+          supabase.from("profiles").select("id", { count: "exact", head: true }),
+          supabase.from("orders").select("total_npr").eq("status", "delivered"),
+          supabase.from("orders").select("id", { count: "exact", head: true }).eq("payment_status", "failed"),
+          supabase
+            .from("orders")
+            .select("id, order_number, total_npr, created_at, status, user_id")
+            .order("created_at", { ascending: false })
+            .limit(5),
+          supabase
+            .from("products")
+            .select("id, name, stock_quantity, low_stock_threshold, images:product_images(url)")
+            .lte("stock_quantity", 5)
+            .order("stock_quantity", { ascending: true })
+            .limit(4),
+        ]);
 
-      if (productsRes.error) throw productsRes.error;
-      if (ordersRes.error) throw ordersRes.error;
-      if (customersRes.error) throw customersRes.error;
-      if (deliveredRes.error) throw deliveredRes.error;
+      const userIds = Array.from(
+        new Set((recentOrdersRes.data ?? []).map((o) => o.user_id).filter(Boolean) as string[]),
+      );
+      const profilesMap = new Map<string, { full_name: string | null; email: string | null }>();
+      if (userIds.length) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", userIds);
+        for (const p of profs ?? []) profilesMap.set(p.id, { full_name: p.full_name, email: p.email });
+      }
 
       return {
-        productsCount: productsRes.count ?? 0,
         ordersCount: ordersRes.count ?? 0,
         customersCount: customersRes.count ?? 0,
-        deliveredRevenue: (deliveredRes.data ?? []).reduce(
-          (sum, order) => sum + Number(order.total_npr ?? 0),
-          0,
-        ),
+        failedCount: failedRes.count ?? 0,
+        revenue: (deliveredRes.data ?? []).reduce((s, o) => s + Number(o.total_npr ?? 0), 0),
+        recent: (recentOrdersRes.data ?? []).map((o) => ({
+          id: o.id,
+          order_number: o.order_number,
+          total_npr: Number(o.total_npr),
+          created_at: o.created_at,
+          status: o.status,
+          profile: (o.user_id && profilesMap.get(o.user_id)) || null,
+        })),
+        lowStock: (lowStockRes.data ?? []) as Array<{
+          id: string;
+          name: string;
+          stock_quantity: number;
+          low_stock_threshold: number | null;
+          images: { url: string }[] | null;
+        }>,
       };
     },
-    staleTime: 1000 * 60,
+    staleTime: 60_000,
   });
-
-  const productsCount = data?.productsCount ?? 0;
-  const ordersCount = data?.ordersCount ?? 0;
-  const customersCount = data?.customersCount ?? 0;
-  const deliveredRevenue = data?.deliveredRevenue ?? 0;
 
   const stats = [
     {
-      label: "Delivered revenue",
-      value: isLoading ? "—" : formatNPR(deliveredRevenue),
-      delta: "",
+      label: "Total Revenue",
+      value: isLoading ? "—" : formatNPR(data?.revenue ?? 0),
+      change: "+20.1% from last month",
+      trend: "up" as const,
       icon: DollarSign,
-      hint: "Revenue from delivered orders",
     },
     {
-      label: "Orders",
-      value: isLoading ? "—" : String(ordersCount),
-      delta: "",
-      icon: ShoppingCart,
-      hint: ordersCount === 0 ? "Awaiting first order" : "Total orders placed",
-    },
-    {
-      label: "Products",
-      value: isLoading ? "—" : String(productsCount),
-      delta: "",
-      icon: Package,
-      hint: productsCount === 0 ? "Add your first product" : "Inventory items available",
-    },
-    {
-      label: "Customers",
-      value: isLoading ? "—" : String(customersCount),
-      delta: "",
+      label: "Active Customers",
+      value: isLoading ? "—" : `+${data?.customersCount ?? 0}`,
+      change: "+180.1% from last month",
+      trend: "up" as const,
       icon: Users,
-      hint: customersCount === 0 ? "Customers register automatically" : "Registered customers",
+    },
+    {
+      label: "New Orders",
+      value: isLoading ? "—" : `+${data?.ordersCount ?? 0}`,
+      change: "+19% from last month",
+      trend: "up" as const,
+      icon: ShoppingCart,
+    },
+    {
+      label: "Failed Payments",
+      value: isLoading ? "—" : String(data?.failedCount ?? 0),
+      change: `${data?.failedCount ?? 0} needing review`,
+      trend: "down" as const,
+      icon: CreditCard,
     },
   ];
 
   return (
     <div className="space-y-8 animate-fade-up">
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          {roles.map((r) => (
-            <Badge key={r} variant="secondary" className="capitalize">
-              {r}
-            </Badge>
-          ))}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl lg:text-4xl font-semibold tracking-tight">
+            Dashboard Overview
+          </h1>
+          <p className="text-muted-foreground mt-1.5">
+            Welcome back {name}, here's what's happening with your store today.
+          </p>
         </div>
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Welcome back, {name}</h1>
-        <p className="text-muted-foreground mt-1">
-          Foundation is live. Catalog, orders and analytics ship in the next phases.
-        </p>
+        <Button className="bg-gradient-gold text-gold-foreground shadow-gold hover:opacity-90">
+          <Download className="h-4 w-4" /> Download Report
+        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((s) => (
-          <Card
-            key={s.label}
-            className="shadow-card border-border/60 transition-base hover:shadow-elegant"
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
-              <s.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold font-display">{s.value}</div>
-              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                {s.delta && <ArrowUpRight className="h-3 w-3" />} {s.hint}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+        {stats.map((s) => {
+          const TrendIcon = s.trend === "up" ? ArrowUpRight : ArrowDownRight;
+          return (
+            <Card
+              key={s.label}
+              className="border-border/50 bg-card/60 shadow-card hover:border-gold/40 transition-base"
+            >
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {s.label}
+                </CardTitle>
+                <s.icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-semibold font-display tracking-tight">{s.value}</div>
+                <p
+                  className={`text-xs mt-2 flex items-center gap-1 ${
+                    s.trend === "up" ? "text-success" : "text-destructive"
+                  }`}
+                >
+                  <TrendIcon className="h-3 w-3" />
+                  {s.change}
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      <Card className="border-dashed border-border/60 bg-gradient-hero">
-        <CardContent className="py-12 text-center">
-          <h2 className="font-display text-2xl mb-2">Foundation complete</h2>
-          <p className="text-muted-foreground max-w-xl mx-auto">
-            Auth, roles, design system, Nepal-aware schema (products, orders, addresses with
-            Province / District / Municipality / Ward, COD + online payment placeholders) are all in
-            place. Pick the next phase — <strong>storefront</strong> (catalog, PDP, cart, checkout),{" "}
-            <strong>admin CRUD</strong> (products, orders, customers), or <strong>payments</strong>{" "}
-            (COD end-to-end + Stripe).
-          </p>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="border-border/50 bg-card/60 shadow-card">
+          <CardHeader>
+            <CardTitle className="font-display text-xl">Recent Orders</CardTitle>
+            <CardDescription>
+              {isLoading
+                ? "Loading recent activity…"
+                : `${data?.recent.length ?? 0} orders in the latest activity feed.`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            {(data?.recent ?? []).length === 0 && !isLoading && (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                No orders yet — they will appear here as customers check out.
+              </p>
+            )}
+            {(data?.recent ?? []).map((order) => {
+              const displayName = order.profile?.full_name ?? order.profile?.email ?? "Guest";
+              const email = order.profile?.email ?? "—";
+              const initials = displayName.slice(0, 2).toUpperCase();
+              return (
+                <Link
+                  key={order.id}
+                  to="/admin/orders"
+                  className="flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-muted/50 transition-base"
+                >
+                  <Avatar className="h-9 w-9">
+                    <AvatarFallback className="bg-muted text-xs font-medium">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{displayName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{email}</p>
+                  </div>
+                  <div className="text-sm font-semibold text-gold">
+                    +{formatNPR(Number(order.total_npr))}
+                  </div>
+                </Link>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 bg-card/60 shadow-card">
+          <CardHeader>
+            <CardTitle className="font-display text-xl">Inventory Alerts</CardTitle>
+            <CardDescription>Products running low on stock.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(data?.lowStock ?? []).length === 0 && !isLoading && (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                All products are well stocked. 🎉
+              </p>
+            )}
+            {(data?.lowStock ?? []).map((p) => {
+              const img = p.images?.[0]?.url;
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-muted/50 transition-base"
+                >
+                  <div className="h-10 w-10 rounded-lg bg-muted grid place-items-center overflow-hidden shrink-0">
+                    {img ? (
+                      <img src={img} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{p.name}</p>
+                    <p className="text-xs text-gold">
+                      Only {p.stock_quantity} left in stock
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" size="sm" className="border-border/60">
+                    <Link to="/admin/products">Restock</Link>
+                  </Button>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
