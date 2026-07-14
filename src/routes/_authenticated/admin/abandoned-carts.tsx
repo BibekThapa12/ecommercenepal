@@ -26,15 +26,16 @@ function AbandonedCarts() {
 
   // Group by user
   const byUser = new Map<string, { name: string; email: string; items: any[]; value: number; last: string }>();
-  for (const it of data) {
-    const uid = it.user_id;
-    const cur = byUser.get(uid) ?? { name: it.profiles?.full_name ?? "—", email: it.profiles?.email ?? "—", items: [], value: 0, last: it.updated_at };
+  for (const it of data as any[]) {
+    const uid = it.user_id as string;
+    const cur = byUser.get(uid) ?? { name: it.profiles?.full_name ?? "—", email: it.profiles?.email ?? "—", items: [] as any[], value: 0, last: it.updated_at };
     cur.items.push(it);
     cur.value += Number(it.products?.price_npr ?? 0) * it.quantity;
     if (it.updated_at > cur.last) cur.last = it.updated_at;
     byUser.set(uid, cur);
   }
   const rows = [...byUser.entries()];
+
 
   return (
     <div className="space-y-4">

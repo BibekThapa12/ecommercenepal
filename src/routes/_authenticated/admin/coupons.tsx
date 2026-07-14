@@ -75,7 +75,7 @@ function Coupons() {
                   <TableCell className="text-xs text-muted-foreground">{c.starts_at ? new Date(c.starts_at).toLocaleDateString() : "—"} → {c.ends_at ? new Date(c.ends_at).toLocaleDateString() : "∞"}</TableCell>
                   <TableCell>{c.is_active ? <Badge>Active</Badge> : <Badge variant="secondary">Off</Badge>}</TableCell>
                   <TableCell className="text-right space-x-1">
-                    <Button size="icon" variant="ghost" onClick={() => setForm({
+                    <Button size="icon" variant="ghost" onClick={() => { setForm({
                       id: c.id, code: c.code, description: c.description ?? "", discount_type: c.discount_type,
                       discount_value: String(c.discount_value), min_order_npr: String(c.min_order_npr),
                       max_discount_npr: c.max_discount_npr != null ? String(c.max_discount_npr) : "",
@@ -84,7 +84,8 @@ function Coupons() {
                       starts_at: c.starts_at ? c.starts_at.slice(0,10) : "",
                       ends_at: c.ends_at ? c.ends_at.slice(0,10) : "",
                       is_active: c.is_active,
-                    }) || setOpen(true)}><Pencil className="h-4 w-4" /></Button>
+                    }); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+
                     <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete coupon?")) del.mutate(c.id); }}><Trash2 className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
