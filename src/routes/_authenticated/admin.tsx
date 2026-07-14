@@ -70,16 +70,16 @@ const navGroups: { label: string; items: AdminNavItem[] }[] = [
     label: "Overview",
     items: [
       { title: "Dashboard", url: "/admin", icon: LayoutDashboard, exact: true },
-      { title: "Analytics", url: "#analytics", icon: BarChart3, soon: true },
+      { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
     ],
   },
   {
     label: "Orders & Sales",
     items: [
       { title: "Orders", url: "/admin/orders", icon: ShoppingCart },
-      { title: "Draft Orders", url: "#draft-orders", icon: FileText, soon: true },
-      { title: "Payments", url: "#payments", icon: CreditCard, soon: true },
-      { title: "Invoices", url: "#invoices", icon: Receipt, soon: true },
+      { title: "Draft Orders", url: "/admin/draft-orders", icon: FileText },
+      { title: "Payments", url: "/admin/payments", icon: CreditCard },
+      { title: "Invoices", url: "/admin/invoices", icon: Receipt },
     ],
   },
   {
@@ -87,29 +87,30 @@ const navGroups: { label: string; items: AdminNavItem[] }[] = [
     items: [
       { title: "Products", url: "/admin/products", icon: Package },
       { title: "Categories", url: "/admin/categories", icon: FolderTree },
-      { title: "Brands", url: "#brands", icon: Tag, soon: true },
-      { title: "Inventory", url: "#inventory", icon: Boxes, soon: true },
-      { title: "Reservations", url: "#reservations", icon: CalendarCheck, soon: true },
+      { title: "Brands", url: "/admin/brands", icon: Tag },
+      { title: "Inventory", url: "/admin/inventory", icon: Boxes },
+      { title: "Reservations", url: "/admin/reservations", icon: CalendarCheck },
     ],
   },
   {
     label: "Customers & Promotions",
     items: [
       { title: "Customers Directory", url: "/admin/customers", icon: Users },
-      { title: "Product Reviews", url: "#reviews", icon: Star, soon: true },
-      { title: "Coupons & Discounts", url: "#coupons", icon: TicketPercent, soon: true },
-      { title: "Abandoned Carts", url: "#abandoned", icon: ShoppingBasket, soon: true },
+      { title: "Product Reviews", url: "/admin/reviews", icon: Star },
+      { title: "Coupons & Discounts", url: "/admin/coupons", icon: TicketPercent },
+      { title: "Abandoned Carts", url: "/admin/abandoned-carts", icon: ShoppingBasket },
     ],
   },
   {
     label: "System",
     items: [
-      { title: "Customer Inquiries", url: "#inquiries", icon: MessageSquare, soon: true },
-      { title: "Store Settings", url: "#settings", icon: Settings, soon: true },
-      { title: "System Logs", url: "#logs", icon: Activity, soon: true },
+      { title: "Customer Inquiries", url: "/admin/inquiries", icon: MessageSquare },
+      { title: "Store Settings", url: "/admin/settings", icon: Settings },
+      { title: "System Logs", url: "/admin/logs", icon: Activity },
     ],
   },
 ];
+
 
 function AdminLayout() {
   const { user, isStaff, loading, signOut } = useAuth();
