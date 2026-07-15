@@ -163,7 +163,8 @@ function CheckoutPage() {
       if (orderSubtotal <= 0) throw new Error("Order total must be greater than zero.");
 
       const orderShipping = orderSubtotal >= 5000 ? 0 : 150;
-      const orderTotal = orderSubtotal + orderShipping;
+      const orderDiscount = coupon ? Math.min(coupon.discount_npr, orderSubtotal) : 0;
+      const orderTotal = Math.max(0, orderSubtotal - orderDiscount) + orderShipping;
 
       const shippingAddress = {
         recipient_name: selectedAddress.recipient_name,
@@ -184,17 +185,28 @@ function CheckoutPage() {
           subtotal_npr: orderSubtotal,
           shipping_npr: orderShipping,
           tax_npr: 0,
-          discount_npr: 0,
+          discount_npr: orderDiscount,
           total_npr: orderTotal,
           payment_method: method,
           payment_status: "pending",
           status: "pending",
           shipping_address: shippingAddress,
           customer_note: note || null,
+          coupon_code: coupon?.code ?? null,
         })
         .select("id, order_number")
         .single();
       if (oerr) throw oerr;
+
+      if (coupon) {
+        await supabase.from("coupon_redemptions").insert({
+          coupon_id: coupon.coupon_id,
+          user_id: user.id,
+          order_id: order.id,
+          discount_npr: orderDiscount,
+        });
+        await supabase.rpc("increment_coupon_usage" as never, { _coupon_id: coupon.coupon_id } as never).catch(() => {});
+      }
 
       const items = purchasableItems.map((i) => {
         const opts = i.selected_options ?? i.variant?.options ?? {};
