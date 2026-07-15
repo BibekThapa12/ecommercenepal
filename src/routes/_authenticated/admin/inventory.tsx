@@ -50,7 +50,7 @@ function Inventory() {
         _variant_id: undefined as unknown as string,
         _delta: d,
         _reason: reason,
-        _notes: (undefined as unknown as string) ?? "",
+        _notes: "",
       });
       if (error) throw error;
       const res = data as { ok: boolean; new_stock: number };
