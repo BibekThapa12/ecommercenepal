@@ -203,9 +203,8 @@ function CheckoutPage() {
           coupon_id: coupon.coupon_id,
           user_id: user.id,
           order_id: order.id,
-          discount_npr: orderDiscount,
+          discount_applied_npr: orderDiscount,
         });
-        await supabase.rpc("increment_coupon_usage" as never, { _coupon_id: coupon.coupon_id } as never).catch(() => {});
       }
 
       const items = purchasableItems.map((i) => {
