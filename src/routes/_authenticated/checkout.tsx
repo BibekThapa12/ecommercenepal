@@ -114,8 +114,9 @@ function CheckoutPage() {
     onError: (e: Error) => { setCouponError(e.message); setCoupon(null); },
   });
 
+  const discount = coupon?.discount_npr ?? 0;
   const shipping = cart.subtotal > 0 ? (cart.subtotal >= 5000 ? 0 : 150) : 0;
-  const total = cart.subtotal + shipping;
+  const total = Math.max(0, cart.subtotal - discount) + shipping;
   const selectedAddress = addressesQ.data?.find((a) => a.id === addressId);
 
   const place = useMutation({
