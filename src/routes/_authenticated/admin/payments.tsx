@@ -30,7 +30,7 @@ function Payments() {
     mutationFn: async ({ id, payment_status }: { id: string; payment_status: string }) => {
       const { error } = await supabase.from("orders").update({ payment_status: payment_status as any }).eq("id", id);
       if (error) throw error;
-      await supabase.from("system_logs").insert({ level: "info", source: "payments", message: `Payment set to ${payment_status}`, metadata: { order_id: id } });
+      await supabase.from("system_logs").insert({ severity: "info", action: `payment_${payment_status}`, entity_type: "order", entity_id: id, metadata: {} });
     },
     onSuccess: () => { toast.success("Payment status updated"); qc.invalidateQueries({ queryKey: ["admin-payments"] }); },
     onError: (e: Error) => toast.error(e.message),
@@ -39,7 +39,7 @@ function Payments() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("orders").update({ payment_status: "refunded" as any, status: "refunded" as any }).eq("id", id);
       if (error) throw error;
-      await supabase.from("system_logs").insert({ level: "warn", source: "payments", message: "Order refunded", metadata: { order_id: id } });
+      await supabase.from("system_logs").insert({ severity: "warn", action: "order_refunded", entity_type: "order", entity_id: id, metadata: {} });
     },
     onSuccess: () => { toast.success("Order refunded"); qc.invalidateQueries({ queryKey: ["admin-payments"] }); },
     onError: (e: Error) => toast.error(e.message),
