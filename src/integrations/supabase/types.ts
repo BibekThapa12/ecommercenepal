@@ -431,6 +431,62 @@ export type Database = {
           },
         ]
       }
+      invoices: {
+        Row: {
+          created_at: string
+          discount_npr: number
+          id: string
+          invoice_number: string
+          issued_at: string
+          order_id: string
+          pdf_path: string | null
+          shipping_npr: number
+          snapshot: Json
+          subtotal_npr: number
+          tax_npr: number
+          total_npr: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount_npr?: number
+          id?: string
+          invoice_number: string
+          issued_at?: string
+          order_id: string
+          pdf_path?: string | null
+          shipping_npr?: number
+          snapshot?: Json
+          subtotal_npr?: number
+          tax_npr?: number
+          total_npr?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount_npr?: number
+          id?: string
+          invoice_number?: string
+          issued_at?: string
+          order_id?: string
+          pdf_path?: string | null
+          shipping_npr?: number
+          snapshot?: Json
+          subtotal_npr?: number
+          tax_npr?: number
+          total_npr?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           created_at: string
@@ -980,6 +1036,57 @@ export type Database = {
           },
         ]
       }
+      stock_movements: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          delta: number
+          id: string
+          notes: string | null
+          product_id: string
+          ref_id: string | null
+          source: string
+          variant_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          delta: number
+          id?: string
+          notes?: string | null
+          product_id: string
+          ref_id?: string | null
+          source: string
+          variant_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          delta?: number
+          id?: string
+          notes?: string | null
+          product_id?: string
+          ref_id?: string | null
+          source?: string
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_settings: {
         Row: {
           id: string
@@ -1092,7 +1199,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      adjust_stock: {
+        Args: {
+          _delta: number
+          _notes: string
+          _product_id: string
+          _reason: string
+          _variant_id: string
+        }
+        Returns: Json
+      }
+      apply_coupon: {
+        Args: { _code: string; _subtotal: number; _user_id: string }
+        Returns: Json
+      }
       delete_order_as_admin: { Args: { _order_id: string }; Returns: string }
+      expire_reservations: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "manager" | "staff" | "customer"
