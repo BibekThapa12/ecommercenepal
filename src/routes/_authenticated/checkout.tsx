@@ -385,8 +385,41 @@ function CheckoutPage() {
 
             </div>
             <Separator className="my-4" />
+
+            {/* Coupon */}
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Coupon code</Label>
+              {coupon ? (
+                <div className="flex items-center justify-between rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
+                  <span className="font-mono font-semibold">{coupon.code}</span>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => { setCoupon(null); setCouponCode(""); }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="ENTER CODE"
+                    className="h-9 uppercase"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => applyCoupon.mutate()} disabled={applyCoupon.isPending || !couponCode.trim()}>
+                    Apply
+                  </Button>
+                </div>
+              )}
+              {couponError && <p className="text-xs text-destructive">{couponError}</p>}
+            </div>
+
+            <Separator className="my-4" />
             <div className="space-y-2 text-sm">
               <Row label="Subtotal" value={formatNPR(cart.subtotal)} />
+              {discount > 0 && <Row label={`Discount (${coupon?.code})`} value={`- ${formatNPR(discount)}`} />}
               <Row label="Shipping" value={shipping === 0 ? "Free" : formatNPR(shipping)} />
               <Separator className="my-2" />
               <Row label="Total" value={formatNPR(total)} bold />
