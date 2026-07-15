@@ -641,6 +641,9 @@ function ProductDetailsPage() {
           </section>
         </div>
 
+        {/* Reviews */}
+        <ProductReviews productId={product.id} />
+
         {/* Related */}
         {related.length > 0 && (
           <section className="mt-20">
