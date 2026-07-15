@@ -72,6 +72,9 @@ function CheckoutPage() {
   const [addressId, setAddressId] = useState<string | null>(null);
   const [method, setMethod] = useState<PaymentMethod>("cod");
   const [note, setNote] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState<{ code: string; discount_npr: number; coupon_id: string } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   const addressesQ = useQuery({
     queryKey: ["addresses", user?.id],
@@ -87,6 +90,28 @@ function CheckoutPage() {
       if (list.length > 0 && !addressId) setAddressId(list[0].id);
       return list;
     },
+  });
+
+  const applyCoupon = useMutation({
+    mutationFn: async () => {
+      const code = couponCode.trim();
+      if (!code) throw new Error("Enter a coupon code");
+      const { data, error } = await supabase.rpc("apply_coupon", {
+        _code: code,
+        _user_id: user?.id ?? null,
+        _subtotal: cart.subtotal,
+      });
+      if (error) throw error;
+      const res = data as { ok: boolean; error?: string; code?: string; discount_npr?: number; coupon_id?: string };
+      if (!res.ok) throw new Error(res.error ?? "Invalid coupon");
+      return res;
+    },
+    onSuccess: (res) => {
+      setCoupon({ code: res.code!, discount_npr: Number(res.discount_npr), coupon_id: res.coupon_id! });
+      setCouponError(null);
+      toast.success(`Coupon applied: -${formatNPR(Number(res.discount_npr))}`);
+    },
+    onError: (e: Error) => { setCouponError(e.message); setCoupon(null); },
   });
 
   const shipping = cart.subtotal > 0 ? (cart.subtotal >= 5000 ? 0 : 150) : 0;
