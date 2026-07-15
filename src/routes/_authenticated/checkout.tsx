@@ -98,7 +98,7 @@ function CheckoutPage() {
       if (!code) throw new Error("Enter a coupon code");
       const { data, error } = await supabase.rpc("apply_coupon", {
         _code: code,
-        _user_id: user?.id ?? null,
+        _user_id: user?.id ?? (undefined as unknown as string),
         _subtotal: cart.subtotal,
       });
       if (error) throw error;
