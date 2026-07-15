@@ -30,8 +30,18 @@ function Payments() {
     mutationFn: async ({ id, payment_status }: { id: string; payment_status: string }) => {
       const { error } = await supabase.from("orders").update({ payment_status: payment_status as any }).eq("id", id);
       if (error) throw error;
+      await supabase.from("system_logs").insert({ level: "info", source: "payments", message: `Payment set to ${payment_status}`, metadata: { order_id: id } });
     },
     onSuccess: () => { toast.success("Payment status updated"); qc.invalidateQueries({ queryKey: ["admin-payments"] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const refund = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("orders").update({ payment_status: "refunded" as any, status: "refunded" as any }).eq("id", id);
+      if (error) throw error;
+      await supabase.from("system_logs").insert({ level: "warn", source: "payments", message: "Order refunded", metadata: { order_id: id } });
+    },
+    onSuccess: () => { toast.success("Order refunded"); qc.invalidateQueries({ queryKey: ["admin-payments"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
 
