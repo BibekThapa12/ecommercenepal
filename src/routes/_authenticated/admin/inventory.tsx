@@ -45,12 +45,16 @@ function Inventory() {
       if (!adjustFor) return;
       const d = Number(delta);
       if (!d || !reason) throw new Error("Delta and reason required");
-      const newStock = Math.max(0, adjustFor.stock + d);
-      const { error: e1 } = await supabase.from("products").update({ stock_quantity: newStock }).eq("id", adjustFor.id);
-      if (e1) throw e1;
-      const user = (await supabase.auth.getUser()).data.user;
-      const { error: e2 } = await supabase.from("inventory_adjustments").insert({ product_id: adjustFor.id, delta: d, reason, actor_id: user?.id });
-      if (e2) throw e2;
+      const { data, error } = await supabase.rpc("adjust_stock", {
+        _product_id: adjustFor.id,
+        _variant_id: undefined as unknown as string,
+        _delta: d,
+        _reason: reason,
+        _notes: "",
+      });
+      if (error) throw error;
+      const res = data as { ok: boolean; new_stock: number };
+      if (!res?.ok) throw new Error("Adjustment failed");
     },
     onSuccess: () => { toast.success("Stock adjusted"); setAdjustFor(null); setDelta(""); setReason(""); qc.invalidateQueries({ queryKey: ["admin-inventory"] }); qc.invalidateQueries({ queryKey: ["admin-inventory-history"] }); },
     onError: (e: Error) => toast.error(e.message),

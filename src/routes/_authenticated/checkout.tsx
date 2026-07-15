@@ -72,6 +72,9 @@ function CheckoutPage() {
   const [addressId, setAddressId] = useState<string | null>(null);
   const [method, setMethod] = useState<PaymentMethod>("cod");
   const [note, setNote] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState<{ code: string; discount_npr: number; coupon_id: string } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   const addressesQ = useQuery({
     queryKey: ["addresses", user?.id],
@@ -89,8 +92,31 @@ function CheckoutPage() {
     },
   });
 
+  const applyCoupon = useMutation({
+    mutationFn: async () => {
+      const code = couponCode.trim();
+      if (!code) throw new Error("Enter a coupon code");
+      const { data, error } = await supabase.rpc("apply_coupon", {
+        _code: code,
+        _user_id: user?.id ?? (undefined as unknown as string),
+        _subtotal: cart.subtotal,
+      });
+      if (error) throw error;
+      const res = data as { ok: boolean; error?: string; code?: string; discount_npr?: number; coupon_id?: string };
+      if (!res.ok) throw new Error(res.error ?? "Invalid coupon");
+      return res;
+    },
+    onSuccess: (res) => {
+      setCoupon({ code: res.code!, discount_npr: Number(res.discount_npr), coupon_id: res.coupon_id! });
+      setCouponError(null);
+      toast.success(`Coupon applied: -${formatNPR(Number(res.discount_npr))}`);
+    },
+    onError: (e: Error) => { setCouponError(e.message); setCoupon(null); },
+  });
+
+  const discount = coupon?.discount_npr ?? 0;
   const shipping = cart.subtotal > 0 ? (cart.subtotal >= 5000 ? 0 : 150) : 0;
-  const total = cart.subtotal + shipping;
+  const total = Math.max(0, cart.subtotal - discount) + shipping;
   const selectedAddress = addressesQ.data?.find((a) => a.id === addressId);
 
   const place = useMutation({
@@ -137,7 +163,8 @@ function CheckoutPage() {
       if (orderSubtotal <= 0) throw new Error("Order total must be greater than zero.");
 
       const orderShipping = orderSubtotal >= 5000 ? 0 : 150;
-      const orderTotal = orderSubtotal + orderShipping;
+      const orderDiscount = coupon ? Math.min(coupon.discount_npr, orderSubtotal) : 0;
+      const orderTotal = Math.max(0, orderSubtotal - orderDiscount) + orderShipping;
 
       const shippingAddress = {
         recipient_name: selectedAddress.recipient_name,
@@ -158,17 +185,27 @@ function CheckoutPage() {
           subtotal_npr: orderSubtotal,
           shipping_npr: orderShipping,
           tax_npr: 0,
-          discount_npr: 0,
+          discount_npr: orderDiscount,
           total_npr: orderTotal,
           payment_method: method,
           payment_status: "pending",
           status: "pending",
           shipping_address: shippingAddress,
           customer_note: note || null,
+          coupon_code: coupon?.code ?? null,
         })
         .select("id, order_number")
         .single();
       if (oerr) throw oerr;
+
+      if (coupon) {
+        await supabase.from("coupon_redemptions").insert({
+          coupon_id: coupon.coupon_id,
+          user_id: user.id,
+          order_id: order.id,
+          discount_applied_npr: orderDiscount,
+        });
+      }
 
       const items = purchasableItems.map((i) => {
         const opts = i.selected_options ?? i.variant?.options ?? {};
@@ -348,8 +385,41 @@ function CheckoutPage() {
 
             </div>
             <Separator className="my-4" />
+
+            {/* Coupon */}
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Coupon code</Label>
+              {coupon ? (
+                <div className="flex items-center justify-between rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
+                  <span className="font-mono font-semibold">{coupon.code}</span>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => { setCoupon(null); setCouponCode(""); }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="ENTER CODE"
+                    className="h-9 uppercase"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => applyCoupon.mutate()} disabled={applyCoupon.isPending || !couponCode.trim()}>
+                    Apply
+                  </Button>
+                </div>
+              )}
+              {couponError && <p className="text-xs text-destructive">{couponError}</p>}
+            </div>
+
+            <Separator className="my-4" />
             <div className="space-y-2 text-sm">
               <Row label="Subtotal" value={formatNPR(cart.subtotal)} />
+              {discount > 0 && <Row label={`Discount (${coupon?.code})`} value={`- ${formatNPR(discount)}`} />}
               <Row label="Shipping" value={shipping === 0 ? "Free" : formatNPR(shipping)} />
               <Separator className="my-2" />
               <Row label="Total" value={formatNPR(total)} bold />

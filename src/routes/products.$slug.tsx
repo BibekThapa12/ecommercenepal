@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ProductCard, type ProductCardData } from "@/components/product-card";
+import { ProductReviews } from "@/components/product-reviews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -639,6 +640,9 @@ function ProductDetailsPage() {
             </dl>
           </section>
         </div>
+
+        {/* Reviews */}
+        <ProductReviews productId={product.id} />
 
         {/* Related */}
         {related.length > 0 && (
